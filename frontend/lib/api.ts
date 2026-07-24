@@ -20,6 +20,15 @@ export interface ItemDetalhe {
   complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
 }
 
+export interface Chave {
+  id: string;
+  nome: string;
+  prefixo: string;
+  escopos: string[];
+  criadoEm: string;
+  ultimoUso: string | null;
+}
+
 export interface Alerta {
   pdv: string | null;
   nome: string;
@@ -56,6 +65,12 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
+  chaves: {
+    listar: () => req<{ chaves: Chave[] }>('v1/chaves'),
+    criar: (nome: string, escopos: string[]) =>
+      req<{ chave: string; prefixo: string }>('v1/chaves', { method: 'POST', body: JSON.stringify({ nome, escopos }) }),
+    revogar: (id: string) => req<{ ok: boolean }>(`v1/chaves/${id}`, { method: 'DELETE' }),
+  },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' }) =>
     req<{ ok: boolean; erros: string[] }>(`v1/itens/${encodeURIComponent(pdv)}`, {
       method: 'PATCH',

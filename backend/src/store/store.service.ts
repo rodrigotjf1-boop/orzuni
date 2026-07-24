@@ -52,6 +52,18 @@ export class StoreService implements OnModuleInit {
     this.logger.log('persistência: Postgres');
   }
 
+  /** Está com Postgres conectado? (false = modo memória). */
+  get temBanco(): boolean {
+    return !!this.pool;
+  }
+
+  /** Query genérica no pool (para o ApiKeyService). Sem pool → []. */
+  async query(sql: string, params: any[] = []): Promise<any[]> {
+    if (!this.pool) return [];
+    const { rows } = await this.pool.query(sql, params);
+    return rows;
+  }
+
   private async contaId(merchantId: string, nome: string): Promise<string | null> {
     if (!this.pool) return null;
     const cache = this.contaCache.get(merchantId);

@@ -6,6 +6,7 @@ const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
   { href: '/precos', label: 'Preços', icon: 'price' },
+  { href: '/api-erp', label: 'API & ERP', icon: 'api' },
 ];
 
 function Icon({ name }: { name: string }) {
@@ -21,6 +22,12 @@ function Icon({ name }: { name: string }) {
     return (
       <svg viewBox="0 0 24 24">
         <path d="M4 6h16M4 12h16M4 18h11" strokeLinecap="round" />
+      </svg>
+    );
+  if (name === 'api')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M8 7l-4 5 4 5M16 7l4 5-4 5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   return (
