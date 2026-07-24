@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.log
+backend/scripts/snapshot.json
+tools/snapshot.json
+tools/cardapio.json
+.DS_Store
