@@ -23,6 +23,7 @@
   "devDependencies": {
     "@nestjs/cli": "^10.4.0",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
     "typescript": "^5.6.0"
   }
 }

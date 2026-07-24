@@ -21,7 +21,7 @@ export class VigiaController {
     const alvo = merchantId ? [{ merchantId, nome: '' }] : await this.contas.ativas();
     const out: any[] = [];
     for (const c of alvo) {
-      for (const a of this.store.listarAlertas(c.merchantId)) {
+      for (const a of await this.store.listarAlertas(c.merchantId)) {
         out.push({
           pdv: a.externalCode,
           nome: a.nome,

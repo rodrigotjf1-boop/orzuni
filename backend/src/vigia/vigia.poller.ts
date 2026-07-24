@@ -29,10 +29,10 @@ export class VigiaPoller {
       const agora = Date.now();
       for (const c of contas) {
         try {
-          const prev = this.store.getEstado(c.merchantId);
+          const prev = await this.store.getEstado(c.merchantId);
           const { alertas, estado } = await this.vigia.varrer(c.merchantId, prev, agora);
-          this.store.setEstado(c.merchantId, estado);
-          this.store.reconciliarAlertas(
+          await this.store.setEstado(c.merchantId, estado);
+          await this.store.reconciliarAlertas(
             c.merchantId,
             alertas.map((a) => ({
               itemId: a.itemId,
