@@ -16,10 +16,10 @@ export class ChavesController {
     return { chaves: await this.chaves.listar() };
   }
 
-  /** Cria uma chave. Retorna o segredo COMPLETO uma única vez. */
+  /** Cria uma chave, opcionalmente ligada a uma loja. Segredo mostrado uma vez. */
   @Post()
-  async criar(@Body() body: { nome: string; escopos?: string[] }) {
-    const r = await this.chaves.criar(body.nome || 'Sem nome', body.escopos ?? []);
+  async criar(@Body() body: { nome: string; escopos?: string[]; loja?: string }) {
+    const r = await this.chaves.criar(body.nome || 'Sem nome', body.escopos ?? [], body.loja);
     if (!r) return { erro: 'banco indisponível' };
     return r; // { chave, prefixo }
   }

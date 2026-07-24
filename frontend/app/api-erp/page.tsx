@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Chave } from '@/lib/api';
+import { api, type Chave, type Loja } from '@/lib/api';
 import { useToast } from '@/components/toast';
 
 const ESCOPOS = [
@@ -11,15 +11,22 @@ const ESCOPOS = [
 
 export default function ApiErpPage() {
   const [chaves, setChaves] = useState<Chave[] | null>(null);
+  const [lojas, setLojas] = useState<Loja[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState('');
   const [novoEsc, setNovoEsc] = useState<string[]>(['catalogo:ler']);
+  const [novaLoja, setNovaLoja] = useState<string>('');
   const [criada, setCriada] = useState<string | null>(null);
+  // adicionar loja
+  const [lojaMerchant, setLojaMerchant] = useState('');
+  const [lojaNome, setLojaNome] = useState('');
   const toast = useToast();
 
   const carregar = useCallback(async () => {
     try {
-      setChaves((await api.chaves.listar()).chaves);
+      const [k, l] = await Promise.all([api.chaves.listar(), api.lojas.listar()]);
+      setChaves(k.chaves);
+      setLojas(l.lojas);
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -29,10 +36,25 @@ export default function ApiErpPage() {
     carregar();
   }, [carregar]);
 
+  async function addLoja() {
+    if (!lojaMerchant.trim()) return;
+    await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja');
+    setLojaMerchant('');
+    setLojaNome('');
+    toast('Loja adicionada.');
+    carregar();
+  }
+  async function removerLoja(m: string, nome: string) {
+    if (!confirm(`Remover a loja "${nome}" do Orzuni?`)) return;
+    await api.lojas.remover(m);
+    toast('Loja removida.');
+    carregar();
+  }
+
   async function criar() {
     if (!novoNome.trim()) return;
     try {
-      const r = await api.chaves.criar(novoNome.trim(), novoEsc);
+      const r = await api.chaves.criar(novoNome.trim(), novoEsc, novaLoja || undefined);
       setCriada(r.chave);
       setNovoNome('');
       carregar();
@@ -63,6 +85,30 @@ export default function ApiErpPage() {
 
       {erro && <div className="errbox">Não consegui carregar: {erro}</div>}
 
+      {/* lojas */}
+      <div style={card}>
+        <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Lojas</h2>
+        <div className="sub" style={{ marginBottom: 16 }}>Cada loja é um merchant do iFood que autorizou o Orzuni. O vigia varre todas; a chave pode ficar ligada a uma delas.</div>
+        {lojas.map((l) => (
+          <div key={l.merchantId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ fontSize: '.9rem' }}>{l.nome}</b>
+              <div className="mono" style={{ color: 'var(--dim)', fontSize: '.66rem', textTransform: 'none', marginTop: 2 }}>merchant {l.merchantId}</div>
+            </div>
+            <button className="btn ghost mini" onClick={() => removerLoja(l.merchantId, l.nome)}>
+              Remover
+            </button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+          <input style={{ ...box, flex: 2, minWidth: 220, fontFamily: 'var(--font-mono)', fontSize: '.8rem' }} placeholder="merchantId (UUID do iFood)" value={lojaMerchant} onChange={(e) => setLojaMerchant(e.target.value)} />
+          <input style={{ ...box, flex: 1, minWidth: 120 }} placeholder="Nome" value={lojaNome} onChange={(e) => setLojaNome(e.target.value)} />
+          <button className="btn ghost mini" disabled={!lojaMerchant.trim()} onClick={addLoja}>
+            Adicionar loja
+          </button>
+        </div>
+      </div>
+
       {/* criar */}
       <div style={card}>
         <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Nova chave</h2>
@@ -89,6 +135,16 @@ export default function ApiErpPage() {
         ) : (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <input style={{ ...box, flex: 1, minWidth: 200 }} placeholder="Nome (ex.: Saipos · Burger Centro)" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} />
+            {lojas.length > 0 && (
+              <select style={{ ...box, cursor: 'pointer' }} value={novaLoja} onChange={(e) => setNovaLoja(e.target.value)} aria-label="Loja da chave">
+                <option value="">Todas as lojas</option>
+                {lojas.map((l) => (
+                  <option key={l.merchantId} value={l.merchantId}>
+                    {l.nome}
+                  </option>
+                ))}
+              </select>
+            )}
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
               {ESCOPOS.map((e) => {
                 const on = novoEsc.includes(e.id);
@@ -129,7 +185,7 @@ export default function ApiErpPage() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <b style={{ fontSize: '.92rem' }}>{c.nome}</b>
               <div className="mono" style={{ color: 'var(--dim)', fontSize: '.7rem', textTransform: 'none', marginTop: 3 }}>
-                {c.prefixo}••••••••
+                {c.prefixo}•••••••• · {c.loja ? c.loja.nome : 'todas as lojas'}
               </div>
               <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
                 {c.escopos.map((s) => (

@@ -27,6 +27,12 @@ export interface Chave {
   escopos: string[];
   criadoEm: string;
   ultimoUso: string | null;
+  loja: { merchantId: string; nome: string } | null;
+}
+
+export interface Loja {
+  merchantId: string;
+  nome: string;
 }
 
 export interface Alerta {
@@ -38,8 +44,21 @@ export interface Alerta {
   foraHaMs: number;
 }
 
+/** Loja ativa (multi-loja) — escolhida no seletor do topo, guardada no navegador. */
+export function lojaAtiva(): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  return localStorage.getItem('orz_loja') || null;
+}
+export function setLojaAtiva(merchantId: string | null) {
+  if (typeof localStorage === 'undefined') return;
+  if (merchantId) localStorage.setItem('orz_loja', merchantId);
+  else localStorage.removeItem('orz_loja');
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/orzuni/${path}`, {
+  const loja = lojaAtiva();
+  const url = `/api/orzuni/${path}` + (loja ? (path.includes('?') ? '&' : '?') + 'loja=' + encodeURIComponent(loja) : '');
+  const res = await fetch(url, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
@@ -67,9 +86,16 @@ export const api = {
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {
     listar: () => req<{ chaves: Chave[] }>('v1/chaves'),
-    criar: (nome: string, escopos: string[]) =>
-      req<{ chave: string; prefixo: string }>('v1/chaves', { method: 'POST', body: JSON.stringify({ nome, escopos }) }),
+    criar: (nome: string, escopos: string[], loja?: string) =>
+      req<{ chave: string; prefixo: string }>('v1/chaves', { method: 'POST', body: JSON.stringify({ nome, escopos, loja }) }),
     revogar: (id: string) => req<{ ok: boolean }>(`v1/chaves/${id}`, { method: 'DELETE' }),
+  },
+  lojas: {
+    listar: () => req<{ lojas: Loja[] }>('v1/lojas'),
+    disponiveis: () => req<{ lojas: Loja[] }>('v1/lojas/disponiveis'),
+    adicionar: (merchantId: string, nome: string) =>
+      req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
+    remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' }) =>
     req<{ ok: boolean; erros: string[] }>(`v1/itens/${encodeURIComponent(pdv)}`, {
