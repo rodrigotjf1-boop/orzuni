@@ -32,6 +32,13 @@ function Icon({ name }: { name: string }) {
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  // o login não usa o shell (sem sidebar)
+  if (path === '/login') return <>{children}</>;
+
+  async function sair() {
+    await fetch('/api/auth', { method: 'DELETE' });
+    window.location.href = '/login';
+  }
   return (
     <div className="shell">
       <aside>
@@ -59,6 +66,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="hint">
           Conectado a <b>api.orzuni.com</b>. Todas as ações refletem no iFood da loja integrada.
         </div>
+        <button className="nav-item" onClick={sair} style={{ marginTop: 8, cursor: 'pointer', background: 'none', font: 'inherit', width: '100%' }}>
+          <svg viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Sair</span>
+        </button>
       </aside>
       <main>{children}</main>
     </div>

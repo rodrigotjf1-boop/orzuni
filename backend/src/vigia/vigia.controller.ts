@@ -1,11 +1,11 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { StoreService } from '../store/store.service';
 
 /**
  * O vigia como serviço: o ERP/CRM consulta o que está fora do ar e há quanto tempo.
- * GET /v1/vigia/alertas?merchantId=...
+ * GET /v1/vigia/alertas — loja resolvida no servidor (não aceita merchantId do cliente).
  */
 @Controller('vigia')
 @UseGuards(ApiKeyGuard)
@@ -16,11 +16,10 @@ export class VigiaController {
   ) {}
 
   @Get('alertas')
-  async alertas(@Query('merchantId') merchantId?: string) {
+  async alertas() {
     const agora = Date.now();
-    const alvo = merchantId ? [{ merchantId, nome: '' }] : await this.contas.ativas();
     const out: any[] = [];
-    for (const c of alvo) {
+    for (const c of await this.contas.ativas()) {
       for (const a of await this.store.listarAlertas(c.merchantId)) {
         out.push({
           pdv: a.externalCode,

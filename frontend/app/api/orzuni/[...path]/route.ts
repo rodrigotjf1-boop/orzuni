@@ -11,6 +11,15 @@ const BASE = process.env.ORZUNI_API_BASE ?? 'https://api.orzuni.com';
 const KEY = process.env.ORZUNI_API_KEY ?? '';
 
 async function forward(req: NextRequest, path: string[]) {
+  // valida a sessão (o valor do cookie, não só a presença) — barra cookie forjado
+  const token = process.env.ORZUNI_SESSION_TOKEN ?? '';
+  const sess = req.cookies.get('orz_session')?.value ?? '';
+  if (!token || sess !== token) {
+    return new Response(JSON.stringify({ error: 'não autenticado' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   const url = new URL(req.url);
   const alvo = `${BASE}/${path.join('/')}${url.search}`;
   const init: RequestInit = {
