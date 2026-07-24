@@ -42,10 +42,11 @@ export class ApiKeyGuard implements CanActivate {
       req.keyType = 'admin';
       return true;
     }
-    const id = await this.chaves.validarTabela(token);
-    if (id) {
+    const r = await this.chaves.validarTabela(token);
+    if (r) {
       req.keyType = 'api';
-      req.keyId = id;
+      req.keyId = r.keyId;
+      req.contaMerchant = r.merchantId; // loja ligada à chave (multi-loja)
       return true;
     }
     throw new UnauthorizedException('chave de API inválida');

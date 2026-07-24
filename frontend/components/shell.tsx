@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { api, lojaAtiva, setLojaAtiva, type Loja } from '@/lib/api';
 
 const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
@@ -39,6 +41,23 @@ function Icon({ name }: { name: string }) {
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const [lojas, setLojas] = useState<Loja[]>([]);
+  const [loja, setLoja] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (path === '/login') return;
+    setLoja(lojaAtiva());
+    api.lojas
+      .listar()
+      .then((r) => setLojas(r.lojas))
+      .catch(() => {});
+  }, [path]);
+
+  function trocarLoja(m: string) {
+    setLojaAtiva(m || null);
+    window.location.reload();
+  }
+
   // o login não usa o shell (sem sidebar)
   if (path === '/login') return <>{children}</>;
 
@@ -63,6 +82,20 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </svg>
           orzuni
         </div>
+        {lojas.length > 1 && (
+          <select
+            value={loja ?? lojas[0]?.merchantId ?? ''}
+            onChange={(e) => trocarLoja(e.target.value)}
+            aria-label="Loja"
+            style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.82rem', padding: '9px 11px', marginBottom: 8, cursor: 'pointer' }}
+          >
+            {lojas.map((l) => (
+              <option key={l.merchantId} value={l.merchantId}>
+                {l.nome}
+              </option>
+            ))}
+          </select>
+        )}
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={`nav-item${path.startsWith(n.href) ? ' active' : ''}`}>
             <Icon name={n.icon} />
