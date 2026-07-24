@@ -282,6 +282,11 @@ h1 span {
   background: currentColor;
 }
 
+.itemlink:hover {
+  color: var(--tanger);
+  border-bottom-color: var(--tanger) !important;
+}
+
 .loading,
 .errbox,
 .empty {

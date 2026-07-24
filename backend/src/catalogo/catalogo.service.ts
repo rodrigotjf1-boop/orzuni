@@ -2,6 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IfoodCatalogService } from '../ifood/ifood-catalog.service';
 import type { IfoodItem } from '../ifood/ifood.types';
 
+export interface ItemDetalhe {
+  pdv: string;
+  nome: string;
+  descricao: string;
+  categoria: string;
+  preco: number;
+  promo: { de: number } | null;
+  status: 'no_ar' | 'pausado';
+  complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
+}
+
 /** Item no formato CANÔNICO do Orzuni (não fala "iFood" por fora). */
 export interface ItemCanonico {
   pdv: string | null;
@@ -108,6 +119,78 @@ export class CatalogoService {
 
   async batch(merchantId: string, batchId: string) {
     return this.ifood.getBatch(merchantId, batchId);
+  }
+
+  /** Detalhe de um item pelo código de PDV (para o editor). */
+  async detalhe(merchantId: string, pdv: string): Promise<ItemDetalhe | null> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return null;
+    const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
+    const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
+    const preco = ctx?.price ?? ref.item.price;
+    const produto = flat?.products?.find((p) => p.id === ref.item.productId) ?? flat?.products?.[0];
+    const complementos = (flat?.optionGroups ?? []).map((g) => ({
+      grupo: g.name,
+      obrigatorio: (g.min ?? 0) > 0,
+      opcoes: (g.optionIds ?? []).map((oid) => {
+        const o = flat?.options?.find((x) => x.id === oid);
+        return { nome: o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado' };
+      }),
+    }));
+    return {
+      pdv,
+      nome: ref.nome,
+      descricao: (produto as any)?.description ?? '',
+      categoria: ref.categoria,
+      preco: preco?.value ?? 0,
+      promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
+      status: this.noAr(ref.item) ? 'no_ar' : 'pausado',
+      complementos,
+    };
+  }
+
+  /**
+   * Edita um item pelo PDV. nome/descrição → PUT /products (assíncrono, com retry);
+   * preço → PATCH (preserva promo); status → PATCH. Só toca no que veio no body.
+   */
+  async editar(
+    merchantId: string,
+    pdv: string,
+    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' },
+  ): Promise<{ ok: boolean; erros: string[] }> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { ok: false, erros: ['item não encontrado'] };
+    const erros: string[] = [];
+
+    if (campos.nome !== undefined || campos.descricao !== undefined) {
+      const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
+        ...(campos.nome !== undefined ? { name: campos.nome } : {}),
+        ...(campos.descricao !== undefined ? { description: campos.descricao } : {}),
+      });
+      if (!ok) erros.push('nome/descrição');
+    }
+    if (campos.preco !== undefined) {
+      const r = await this.reprecificar(merchantId, [{ pdv, preco: campos.preco }]);
+      if (!r.batchId) erros.push('preço');
+    }
+    if (campos.status !== undefined) {
+      const r = await this.status(merchantId, pdv, campos.status);
+      if (!r.batchId) erros.push('status');
+    }
+    return { ok: erros.length === 0, erros };
+  }
+
+  // resolve o PDV → item (itemId, productId, categoria) varrendo o catálogo
+  private async resolver(
+    merchantId: string,
+    pdv: string,
+  ): Promise<{ itemId: string; item: IfoodItem; nome: string; categoria: string } | null> {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return null;
+    const cats = await this.ifood.categories(merchantId, cat.catalogId);
+    for (const c of cats)
+      for (const it of c.items ?? []) if (this.pdv(it) === pdv) return { itemId: it.id, item: it, nome: it.name ?? it.id, categoria: c.name };
+    return null;
   }
 
   // ---- helpers ----

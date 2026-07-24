@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
 
@@ -92,7 +93,13 @@ export default function CardapioPage() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ fontWeight: 600 }}>{it.nome}</div>
+                    {it.pdv ? (
+                      <Link href={`/item/${encodeURIComponent(it.pdv)}`} style={{ fontWeight: 600, borderBottom: '1px solid transparent' }} className="itemlink">
+                        {it.nome}
+                      </Link>
+                    ) : (
+                      <div style={{ fontWeight: 600 }}>{it.nome}</div>
+                    )}
                     <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>
                       PDV {it.pdv ?? '—'}
                     </div>

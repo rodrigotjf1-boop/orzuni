@@ -9,6 +9,17 @@ export interface ItemCardapio {
   status: 'no_ar' | 'pausado';
 }
 
+export interface ItemDetalhe {
+  pdv: string;
+  nome: string;
+  descricao: string;
+  categoria: string;
+  preco: number;
+  promo: { de: number } | null;
+  status: 'no_ar' | 'pausado';
+  complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
+}
+
 export interface Alerta {
   pdv: string | null;
   nome: string;
@@ -43,5 +54,11 @@ export const api = {
     req<{ batchId: string | null }>(`v1/itens/${encodeURIComponent(pdv)}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    }),
+  detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
+  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' }) =>
+    req<{ ok: boolean; erros: string[] }>(`v1/itens/${encodeURIComponent(pdv)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(campos),
     }),
 };

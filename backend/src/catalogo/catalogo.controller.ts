@@ -43,6 +43,23 @@ export class CatalogoController {
     return this.catalogo.status(await this.merchant(), pdv, body.status);
   }
 
+  /** GET /v1/itens/:pdv — detalhe de um item (para o editor). */
+  @Get('itens/:pdv')
+  async detalhe(@Param('pdv') pdv: string) {
+    const d = await this.catalogo.detalhe(await this.merchant(), pdv);
+    if (!d) return { erro: 'item não encontrado' };
+    return d;
+  }
+
+  /** PATCH /v1/itens/:pdv — edita nome/descrição/preço/status (só o que vier). */
+  @Patch('itens/:pdv')
+  async editar(
+    @Param('pdv') pdv: string,
+    @Body() body: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' },
+  ) {
+    return this.catalogo.editar(await this.merchant(), pdv, body);
+  }
+
   /** GET /v1/lotes/:batchId — acompanha o resultado de um lote assíncrono. */
   @Get('lotes/:batchId')
   async lote(@Param('batchId') batchId: string) {

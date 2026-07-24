@@ -169,6 +169,22 @@ export class IfoodCatalogService {
     return status === 200 ? data : null;
   }
 
+  /** Atualiza um produto (nome/descrição) — propaga para os itens que o usam. */
+  async updateProduct(
+    merchantId: string,
+    productId: string,
+    patch: { name?: string; description?: string },
+    tentativa = 0,
+  ): Promise<boolean> {
+    const r = await this.req('PUT', `/merchants/${merchantId}/products/${productId}`, patch);
+    // PUT é assíncrono: "concurrently modified" = retenta com espera (ver docs §8)
+    if (r.status === 400 && tentativa < 3 && JSON.stringify(r.data).includes('concurrently')) {
+      await new Promise((res) => setTimeout(res, 2000 * (tentativa + 1)));
+      return this.updateProduct(merchantId, productId, patch, tentativa + 1);
+    }
+    return r.status >= 200 && r.status < 300;
+  }
+
   // ---- imagem ----
   /** Sobe uma imagem (data-URI base64) e devolve o imagePath para usar no produto. */
   async uploadImage(merchantId: string, dataUri: string): Promise<string | null> {
