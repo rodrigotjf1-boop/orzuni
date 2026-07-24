@@ -136,11 +136,15 @@ export class IfoodCatalogService {
    */
   async pricesByExternalCode(
     merchantId: string,
-    precos: Array<{ externalCode: string; value: number }>,
+    precos: Array<{ externalCode: string; value: number; originalValue?: number }>,
     context?: string,
   ): Promise<IfoodBatchAck | null> {
     const path = `/merchants/${merchantId}/products/price${context ? `?catalogContext=${context}` : ''}`;
-    const body = precos.map((p) => ({ externalCode: p.externalCode, price: { value: p.value } }));
+    // originalValue vai junto quando presente — preserva o "de/por" (ver docs §8).
+    const body = precos.map((p) => ({
+      externalCode: p.externalCode,
+      price: p.originalValue ? { value: p.value, originalValue: p.originalValue } : { value: p.value },
+    }));
     const { status, data } = await this.req<IfoodBatchAck>('PATCH', path, body);
     return status === 202 ? data : null;
   }
