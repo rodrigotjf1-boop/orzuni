@@ -47,7 +47,8 @@ export default function LoginPage() {
           <circle cx="50" cy="50" r="11.4" fill="#FF6031" />
         </svg>
         <div style={{ fontWeight: 800, fontSize: '1.4rem', letterSpacing: '-.02em', marginBottom: 4 }}>orzuni</div>
-        <div className="sub" style={{ marginBottom: 22 }}>Entre para gerenciar o cardápio.</div>
+        <div className="mono" style={{ fontSize: '.58rem', color: 'var(--tanger)', letterSpacing: '.16em', marginBottom: 10 }}>gestão de cardápio · iFood</div>
+        <div className="sub" style={{ marginBottom: 22 }}>Gerencie o cardápio do seu iFood — sem abrir o portal.</div>
         <input
           type="password"
           value={senha}

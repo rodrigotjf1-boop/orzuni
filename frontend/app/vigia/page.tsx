@@ -59,7 +59,7 @@ export default function VigiaPage() {
           <h1>
             Fora do <span>ar</span>
           </h1>
-          <div className="sub">O que o cliente não consegue pedir — e há quanto tempo.</div>
+          <div className="sub">O que o cliente não consegue pedir no seu iFood — e há quanto tempo.</div>
         </div>
         <button className="btn ghost mini" onClick={carregar}>
           Atualizar

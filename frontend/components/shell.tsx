@@ -58,6 +58,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     window.location.reload();
   }
 
+  // loja iFood conectada (para o indicador). Nome genérico "loja" vira "Loja iFood".
+  const ativaId = loja ?? lojas[0]?.merchantId;
+  const store = lojas.find((l) => l.merchantId === ativaId) ?? lojas[0];
+  const lojaConectada = store && store.nome && store.nome !== 'loja' ? store.nome : 'Loja iFood';
+
   // o login não usa o shell (sem sidebar)
   if (path === '/login') return <>{children}</>;
 
@@ -80,7 +85,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <circle cx="76.87" cy="23.13" r="8.2" fill="#FFA226" />
             <circle cx="50" cy="50" r="11.4" fill="#FF6031" />
           </svg>
-          orzuni
+          <div style={{ lineHeight: 1.1 }}>
+            orzuni
+            <div className="mono" style={{ fontSize: '.52rem', color: 'var(--dim)', letterSpacing: '.14em', marginTop: 2 }}>cardápio iFood</div>
+          </div>
         </div>
         {lojas.length > 1 && (
           <select
@@ -103,8 +111,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         ))}
         <div className="spacer" />
-        <div className="hint">
-          Conectado a <b>api.orzuni.com</b>. Todas as ações refletem no iFood da loja integrada.
+        <div style={{ border: '1px solid var(--line)', borderRadius: 14, background: 'var(--ink2)', padding: '12px 13px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', flex: 'none', boxShadow: '0 0 8px var(--green)' }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: '.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {lojaConectada}
+            </div>
+            <div className="mono" style={{ fontSize: '.56rem', color: 'var(--dim)', marginTop: 2 }}>
+              iFood · conectado
+            </div>
+          </div>
         </div>
         <button className="nav-item" onClick={sair} style={{ marginTop: 8, cursor: 'pointer', background: 'none', font: 'inherit', width: '100%' }}>
           <svg viewBox="0 0 24 24">
