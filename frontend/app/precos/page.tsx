@@ -64,7 +64,7 @@ export default function PrecosPage() {
           <h1>
             Preços <span>em lote</span>
           </h1>
-          <div className="sub">Edite tudo em rascunho e publique de uma vez. A promoção “de/por” é preservada.</div>
+          <div className="sub">Edite os preços do seu cardápio iFood em rascunho e publique de uma vez. A promoção “de/por” é preservada.</div>
         </div>
         <button className="btn" disabled={!pendentes.length || enviando} onClick={publicar}>
           {enviando ? 'Publicando…' : pendentes.length ? `Publicar ${pendentes.length} preço${pendentes.length > 1 ? 's' : ''}` : 'Publicar'}
