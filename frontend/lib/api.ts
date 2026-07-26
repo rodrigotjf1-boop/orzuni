@@ -83,6 +83,14 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  criarCategoria: (nome: string) => req<{ ok: boolean; categoryId?: string; erro?: string }>('v1/categorias', { method: 'POST', body: JSON.stringify({ nome }) }),
+  criarItem: (dados: {
+    nome: string;
+    descricao?: string;
+    preco: number;
+    categoria: string;
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+  }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {
     listar: () => req<{ chaves: Chave[] }>('v1/chaves'),

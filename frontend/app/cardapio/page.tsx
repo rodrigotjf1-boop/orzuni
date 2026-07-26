@@ -52,21 +52,17 @@ export default function CardapioPage() {
           </h1>
           <div className="sub">O cardápio do iFood da loja — pause, reative e acompanhe.</div>
         </div>
-        <input
-          placeholder="Buscar item ou PDV…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          style={{
-            background: 'var(--ink2)',
-            border: '1px solid var(--line)',
-            borderRadius: 11,
-            color: 'var(--cream)',
-            fontFamily: 'inherit',
-            fontSize: '.9rem',
-            padding: '11px 14px',
-            minWidth: 220,
-          }}
-        />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            placeholder="Buscar item ou PDV…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '11px 14px', minWidth: 200 }}
+          />
+          <Link href="/item/novo" className="btn" style={{ whiteSpace: 'nowrap' }}>
+            + Novo item
+          </Link>
+        </div>
       </div>
 
       {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
