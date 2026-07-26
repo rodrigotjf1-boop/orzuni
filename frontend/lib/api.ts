@@ -83,6 +83,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  statusMassa: (itens: Array<{ pdv: string; status: 'no_ar' | 'pausado' }>) =>
+    req<{ batchId: string | null }>('v1/status', { method: 'PATCH', body: JSON.stringify({ itens }) }),
   criarCategoria: (nome: string) => req<{ ok: boolean; categoryId?: string; erro?: string }>('v1/categorias', { method: 'POST', body: JSON.stringify({ nome }) }),
   criarItem: (dados: {
     nome: string;

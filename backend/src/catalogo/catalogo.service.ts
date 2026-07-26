@@ -104,16 +104,26 @@ export class CatalogoService {
     return { batchId: ack?.batchId ?? null, ignorados };
   }
 
-  /** Pausa/reativa por PDV (lote). */
+  /** Pausa/reativa por PDV (lote de 1). */
   async status(
     merchantId: string,
     pdv: string,
     status: 'no_ar' | 'pausado',
     context = 'DEFAULT',
   ): Promise<{ batchId: string | null }> {
+    return this.statusEmMassa(merchantId, [{ pdv, status }], context);
+  }
+
+  /** Pausa/reativa VÁRIOS itens por PDV numa única chamada (atualização em massa). */
+  async statusEmMassa(
+    merchantId: string,
+    itens: Array<{ pdv: string; status: 'no_ar' | 'pausado' }>,
+    context = 'DEFAULT',
+  ): Promise<{ batchId: string | null }> {
+    if (!itens.length) return { batchId: null };
     const ack = await this.ifood.statusByExternalCode(
       merchantId,
-      [{ externalCode: pdv, status: status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE' }],
+      itens.map((i) => ({ externalCode: i.pdv, status: i.status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE' })),
       context,
     );
     return { batchId: ack?.batchId ?? null };

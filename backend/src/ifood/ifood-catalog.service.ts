@@ -42,17 +42,36 @@ export class IfoodCatalogService {
     tentativa = 0,
   ): Promise<{ status: number; data: T }> {
     const token = await this.auth.getToken();
-    const res = await fetch(`${this.base}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
 
-    // 5xx / rede → backoff exponencial (1s, 2s, 4s), no máx. 3 tentativas
+    // timeout de 30s por requisição (critério de homologação) — aborta e trata
+    // como transitório: retenta com backoff; esgotado, devolve 504 (sem travar).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
+    let res: Response;
+    try {
+      res = await fetch(`${this.base}${path}`, {
+        method,
+        signal: ctrl.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (e: any) {
+      clearTimeout(timer);
+      const timeout = e?.name === 'AbortError';
+      if (tentativa < 3) {
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** tentativa));
+        return this.req<T>(method, path, body, tentativa + 1);
+      }
+      this.logger.warn(`${method} ${path} → ${timeout ? 'timeout(30s)' : 'rede'}: ${e?.message ?? e}`);
+      return { status: timeout ? 504 : 503, data: { error: { message: timeout ? 'tempo esgotado' : 'rede' } } as any };
+    }
+    clearTimeout(timer);
+
+    // 5xx → backoff exponencial (1s, 2s, 4s), no máx. 3 tentativas
     if (res.status >= 500 && tentativa < 3) {
       await new Promise((r) => setTimeout(r, 1000 * 2 ** tentativa));
       return this.req<T>(method, path, body, tentativa + 1);
