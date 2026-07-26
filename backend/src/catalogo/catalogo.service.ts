@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { IfoodCatalogService } from '../ifood/ifood-catalog.service';
 import type { IfoodItem } from '../ifood/ifood.types';
-import { validarItem, validarCategoria, mapErroIfood, type DadosItem } from './validacao';
+import { validarItem, validarCategoria, validarShifts, toIfoodShifts, fromIfoodShifts, mapErroIfood, type DadosItem, type Shift } from './validacao';
 
 export interface ItemDetalhe {
   pdv: string;
@@ -13,6 +13,7 @@ export interface ItemDetalhe {
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
   complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
+  disponibilidade: Shift[];
 }
 
 /** Item no formato CANÔNICO do Orzuni (não fala "iFood" por fora). */
@@ -158,7 +159,14 @@ export class CatalogoService {
       promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
       status: this.noAr(ref.item) ? 'no_ar' : 'pausado',
       complementos,
+      disponibilidade: fromIfoodShifts((flat?.item as any)?.shifts ?? (ref.item as any).shifts),
     };
+  }
+
+  /** Contextos (canais) do catálogo — ex.: DEFAULT (Delivery), INDOOR, WHITELABEL. */
+  async contextos(merchantId: string): Promise<string[]> {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    return cat?.context?.length ? cat.context : ['DEFAULT'];
   }
 
   /**
@@ -168,11 +176,14 @@ export class CatalogoService {
   async editar(
     merchantId: string,
     pdv: string,
-    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' },
+    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] },
   ): Promise<{ ok: boolean; erros: string[] }> {
     const ref = await this.resolver(merchantId, pdv);
     if (!ref) return { ok: false, erros: ['item não encontrado'] };
     const erros: string[] = [];
+
+    if (campos.shifts !== undefined) erros.push(...validarShifts(campos.shifts));
+    if (erros.length) return { ok: false, erros };
 
     if (campos.nome !== undefined || campos.descricao !== undefined) {
       const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
@@ -188,6 +199,29 @@ export class CatalogoService {
     if (campos.status !== undefined) {
       const r = await this.status(merchantId, pdv, campos.status);
       if (!r.batchId) erros.push('status');
+    }
+    // disponibilidade (shifts): exige re-PUT do item completo (usa o flat como base)
+    if (campos.shifts !== undefined) {
+      const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
+      if (flat) {
+        // o flat traz campos derivados/read-only (weight com unidade inválida,
+        // industrialized) que o PUT rejeita — remover antes de reenviar.
+        const limpar = (p: any) => {
+          const { weight, industrialized, ...resto } = p;
+          return resto;
+        };
+        // só o produto PRINCIPAL vai em products[]; produtos das opções podem ser
+        // industrializados de outro dono (não atualizáveis). As opções apenas os referenciam.
+        const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
+        const payload = {
+          item: { ...flat.item, shifts: toIfoodShifts(campos.shifts) ?? [] },
+          products: principal.length ? principal : (flat.products ?? []).map(limpar),
+          optionGroups: flat.optionGroups,
+          options: flat.options,
+        };
+        const r = await this.ifood.putItem(merchantId, payload);
+        if (!(r.status >= 200 && r.status < 300)) erros.push('disponibilidade');
+      } else erros.push('disponibilidade');
     }
     return { ok: erros.length === 0, erros };
   }
@@ -213,7 +247,7 @@ export class CatalogoService {
    * existir, cria a categoria.
    */
   async criarItem(merchantId: string, d: DadosItem): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
-    const erros = validarItem(d);
+    const erros = [...validarItem(d), ...validarShifts(d.shifts)];
     if (erros.length) return { ok: false, erro: erros.join('; ') };
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
@@ -273,8 +307,19 @@ export class CatalogoService {
       ...optionProducts,
     ];
 
+    const shifts = toIfoodShifts(d.shifts);
     const payload = {
-      item: { id: itemId, type: 'DEFAULT', categoryId, productId, status: 'AVAILABLE', externalCode: ext, price: { value: d.preco }, index: 1 },
+      item: {
+        id: itemId,
+        type: 'DEFAULT',
+        categoryId,
+        productId,
+        status: 'AVAILABLE',
+        externalCode: ext,
+        price: { value: d.preco },
+        index: 1,
+        ...(shifts ? { shifts } : {}),
+      },
       products,
       optionGroups,
       options,

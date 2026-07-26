@@ -2,8 +2,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, type ItemDetalhe } from '@/lib/api';
+import { api, type ItemDetalhe, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
+import { ShiftsEditor } from '@/components/shifts';
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const parse = (v: string) => {
@@ -24,6 +25,7 @@ export default function EditorPage() {
   const [descricao, setDescricao] = useState('');
   const [precoStr, setPrecoStr] = useState('');
   const [status, setStatus] = useState<'no_ar' | 'pausado'>('no_ar');
+  const [shifts, setShifts] = useState<Shift[]>([]);
 
   const carregar = useCallback(async () => {
     try {
@@ -33,6 +35,7 @@ export default function EditorPage() {
       setDescricao(d.descricao);
       setPrecoStr(brl(d.preco));
       setStatus(d.status);
+      setShifts(d.disponibilidade ?? []);
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -44,9 +47,10 @@ export default function EditorPage() {
   }, [carregar]);
 
   const preco = parse(precoStr) ?? det?.preco ?? 0;
+  const shiftsMudou = !!det && JSON.stringify(shifts) !== JSON.stringify(det.disponibilidade ?? []);
   const dirty =
     !!det &&
-    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status);
+    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou);
 
   async function salvar() {
     if (!det || !dirty) return;
@@ -56,6 +60,7 @@ export default function EditorPage() {
     if (descricao !== det.descricao) campos.descricao = descricao;
     if (Math.abs(preco - det.preco) >= 0.005) campos.preco = preco;
     if (status !== det.status) campos.status = status;
+    if (shiftsMudou) campos.shifts = shifts;
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
@@ -191,7 +196,12 @@ export default function EditorPage() {
               </div>
             ))}
             <div className="sub" style={{ marginTop: 12, fontSize: '.72rem' }}>
-              Complementos e foto: edição avançada em breve. Aqui você já ajusta nome, descrição, preço e disponibilidade.
+              Complementos e foto: edição avançada em breve.
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 16 }}>
+              <div className="mono" style={{ color: 'var(--dim)', marginBottom: 8 }}>disponibilidade</div>
+              <ShiftsEditor shifts={shifts} onChange={setShifts} />
             </div>
           </div>
         </div>

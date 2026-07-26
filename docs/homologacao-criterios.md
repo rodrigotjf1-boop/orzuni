@@ -22,8 +22,8 @@
 ## 3. Operações em produção
 - ✅ Preço em massa (PATCH) — tela Preços
 - ✅ Status em massa — multi-seleção no Cardápio → PATCH /status (lote)
-- 🟡 Contexto por canal (contextModifiers) — só DEFAULT; loja de teste é Delivery-only (a esclarecer)
-- ❌ Agendamento de disponibilidade (shifts) — não implementado
+- ✅ Contexto por canal (contextModifiers) — GET /contextos + seletor de canal em Preços; reprice/status por `?contexto` (loja de teste só tem DEFAULT, mas a capacidade está pronta)
+- ✅ Agendamento de disponibilidade (shifts) — criar/editar item com janelas (horário + dias) na UI; provado (round-trip)
 - ⛔ Multi-catálogo (loja tem 1 catálogo)
 
 ## 4. Qualidade e resiliência

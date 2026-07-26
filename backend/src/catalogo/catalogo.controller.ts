@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
-import type { DadosItem } from './validacao';
+import type { DadosItem, Shift } from './validacao';
 
 /**
  * API aberta do catálogo — modelo CANÔNICO (o ERP não conhece "iFood" nem ids).
@@ -37,13 +37,20 @@ export class CatalogoController {
     return { itens: await this.catalogo.cardapio(await this.merchant(req, loja)) };
   }
 
+  /** GET /v1/contextos — canais do catálogo (DEFAULT/INDOOR/WHITELABEL). */
+  @Get('contextos')
+  async contextos(@Req() req: any, @Query('loja') loja?: string) {
+    return { contextos: await this.catalogo.contextos(await this.merchant(req, loja)) };
+  }
+
   @Patch('precos')
   async precos(
     @Req() req: any,
     @Query('loja') loja: string | undefined,
+    @Query('contexto') contexto: string | undefined,
     @Body() body: { itens: Array<{ pdv: string; preco: number; manterPromo?: boolean }> },
   ) {
-    const r = await this.catalogo.reprecificar(await this.merchant(req, loja), body.itens ?? []);
+    const r = await this.catalogo.reprecificar(await this.merchant(req, loja), body.itens ?? [], contexto || 'DEFAULT');
     return { batchId: r.batchId, ignorados: r.ignorados };
   }
 
@@ -57,9 +64,10 @@ export class CatalogoController {
   async statusMassa(
     @Req() req: any,
     @Query('loja') loja: string | undefined,
+    @Query('contexto') contexto: string | undefined,
     @Body() body: { itens: Array<{ pdv: string; status: 'no_ar' | 'pausado' }> },
   ) {
-    return this.catalogo.statusEmMassa(await this.merchant(req, loja), body.itens ?? []);
+    return this.catalogo.statusEmMassa(await this.merchant(req, loja), body.itens ?? [], contexto || 'DEFAULT');
   }
 
   @Get('itens/:pdv')
@@ -74,7 +82,7 @@ export class CatalogoController {
     @Req() req: any,
     @Param('pdv') pdv: string,
     @Query('loja') loja: string | undefined,
-    @Body() body: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' },
+    @Body() body: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] },
   ) {
     return this.catalogo.editar(await this.merchant(req, loja), pdv, body);
   }

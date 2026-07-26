@@ -14,12 +14,17 @@ export default function PrecosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, number>>({}); // pdv → novo preço
   const [enviando, setEnviando] = useState(false);
+  const [contextos, setContextos] = useState<string[]>(['DEFAULT']);
+  const [canal, setCanal] = useState('DEFAULT');
   const toast = useToast();
+
+  const CANAL_NOME: Record<string, string> = { DEFAULT: 'Delivery', INDOOR: 'Salão', WHITELABEL: 'Cardápio Digital' };
 
   const carregar = useCallback(async () => {
     try {
-      const r = await api.cardapio();
+      const [r, c] = await Promise.all([api.cardapio(), api.contextos().catch(() => ({ contextos: ['DEFAULT'] }))]);
       setItens(r.itens);
+      setContextos(c.contextos.length ? c.contextos : ['DEFAULT']);
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -46,8 +51,8 @@ export default function PrecosPage() {
     if (!pendentes.length) return;
     setEnviando(true);
     try {
-      const r = await api.reprecos(pendentes.map(([pdv, preco]) => ({ pdv, preco })));
-      toast(`<b style="color:var(--green)">${pendentes.length} preço(s) publicado(s)</b> · lote ${r.batchId?.slice(0, 8) ?? '—'}`);
+      const r = await api.reprecos(pendentes.map(([pdv, preco]) => ({ pdv, preco })), canal);
+      toast(`<b style="color:var(--green)">${pendentes.length} preço(s)</b> publicado(s) em ${CANAL_NOME[canal] ?? canal} · lote ${r.batchId?.slice(0, 8) ?? '—'}`);
       setDraft({});
       setTimeout(carregar, 2500);
     } catch (e: any) {
@@ -66,9 +71,20 @@ export default function PrecosPage() {
           </h1>
           <div className="sub">Edite os preços do seu cardápio iFood em rascunho e publique de uma vez. A promoção “de/por” é preservada.</div>
         </div>
-        <button className="btn" disabled={!pendentes.length || enviando} onClick={publicar}>
-          {enviando ? 'Publicando…' : pendentes.length ? `Publicar ${pendentes.length} preço${pendentes.length > 1 ? 's' : ''}` : 'Publicar'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {contextos.length > 1 && (
+            <select value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal" style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.85rem', padding: '11px 13px', cursor: 'pointer' }}>
+              {contextos.map((c) => (
+                <option key={c} value={c}>
+                  {CANAL_NOME[c] ?? c}
+                </option>
+              ))}
+            </select>
+          )}
+          <button className="btn" disabled={!pendentes.length || enviando} onClick={publicar}>
+            {enviando ? 'Publicando…' : pendentes.length ? `Publicar ${pendentes.length} preço${pendentes.length > 1 ? 's' : ''}` : 'Publicar'}
+          </button>
+        </div>
       </div>
 
       {pendentes.length > 0 && (
