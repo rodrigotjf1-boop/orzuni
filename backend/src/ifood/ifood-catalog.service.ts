@@ -169,6 +169,33 @@ export class IfoodCatalogService {
     return status === 200 ? data : null;
   }
 
+  /** Cria uma categoria. Retorna {status, data, id}. */
+  async createCategory(
+    merchantId: string,
+    catalogId: string,
+    body: { name: string; externalCode: string },
+  ): Promise<{ status: number; data: any; id?: string }> {
+    const r = await this.req<any>('POST', `/merchants/${merchantId}/catalogs/${catalogId}/categories`, {
+      name: body.name,
+      status: 'AVAILABLE',
+      template: 'DEFAULT',
+      externalCode: body.externalCode,
+      index: 99,
+    });
+    return { status: r.status, data: r.data, id: r.data?.id };
+  }
+
+  /** Cria/atualiza um item completo (PUT /items). Retorna {status, data, itemId}. */
+  async putItem(merchantId: string, payload: any, tentativa = 0): Promise<{ status: number; data: any; itemId?: string }> {
+    const r = await this.req<any>('PUT', `/merchants/${merchantId}/items`, payload);
+    // PUT é assíncrono: "concurrently modified" = retenta com espera (docs §8)
+    if (r.status === 400 && tentativa < 3 && JSON.stringify(r.data).includes('concurrently')) {
+      await new Promise((res) => setTimeout(res, 2000 * (tentativa + 1)));
+      return this.putItem(merchantId, payload, tentativa + 1);
+    }
+    return { status: r.status, data: r.data, itemId: r.data?.item?.id };
+  }
+
   /** Atualiza um produto (nome/descrição) — propaga para os itens que o usam. */
   async updateProduct(
     merchantId: string,

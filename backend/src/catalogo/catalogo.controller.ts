@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
+import type { DadosItem } from './validacao';
 
 /**
  * API aberta do catálogo — modelo CANÔNICO (o ERP não conhece "iFood" nem ids).
@@ -68,8 +69,21 @@ export class CatalogoController {
     return this.catalogo.editar(await this.merchant(req, loja), pdv, body);
   }
 
+  /** POST /v1/categorias — cria uma categoria (valida nome). */
+  @Post('categorias')
+  async criarCategoria(@Req() req: any, @Body() body: { nome: string; loja?: string }) {
+    return this.catalogo.criarCategoria(await this.merchant(req, body.loja), body.nome);
+  }
+
+  /** POST /v1/itens — cria um item (simples ou com complementos). Valida antes. */
+  @Post('itens')
+  async criarItem(@Req() req: any, @Body() body: DadosItem & { loja?: string }) {
+    return this.catalogo.criarItem(await this.merchant(req, body.loja), body);
+  }
+
   @Get('lotes/:batchId')
   async lote(@Req() req: any, @Param('batchId') batchId: string, @Query('loja') loja?: string) {
     return this.catalogo.batch(await this.merchant(req, loja), batchId);
   }
 }
+

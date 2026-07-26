@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { IfoodCatalogService } from '../ifood/ifood-catalog.service';
 import type { IfoodItem } from '../ifood/ifood.types';
+import { validarItem, validarCategoria, mapErroIfood, type DadosItem } from './validacao';
 
 export interface ItemDetalhe {
   pdv: string;
@@ -178,6 +180,101 @@ export class CatalogoService {
       if (!r.batchId) erros.push('status');
     }
     return { ok: erros.length === 0, erros };
+  }
+
+  /** Cria uma categoria (POST /categories), validando antes. */
+  async criarCategoria(merchantId: string, nome: string): Promise<{ ok: boolean; categoryId?: string; erro?: string }> {
+    const erros = validarCategoria(nome);
+    if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
+    const r = await this.ifood.createCategory(merchantId, cat.catalogId, {
+      name: nome.trim(),
+      externalCode: 'ORZ-CAT-' + Date.now(),
+    });
+    if (r.status === 201) return { ok: true, categoryId: r.id };
+    const e = mapErroIfood(r.status, r.data);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Cria um item (PUT /items), com produto + complementos opcionais. Valida antes
+   * (título/descrição/preço) e traduz erros. Se `categoria` vier por nome e não
+   * existir, cria a categoria.
+   */
+  async criarItem(merchantId: string, d: DadosItem): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
+    const erros = validarItem(d);
+    if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
+
+    // resolve/cria a categoria
+    let categoryId = d.categoriaId;
+    if (!categoryId) {
+      const cats = await this.ifood.categories(merchantId, cat.catalogId);
+      const achada = cats.find((c) => c.name?.toLowerCase() === d.categoria!.toLowerCase());
+      if (achada) categoryId = achada.id;
+      else {
+        const nova = await this.criarCategoria(merchantId, d.categoria!);
+        if (!nova.ok) return { ok: false, erro: 'não consegui criar a categoria: ' + nova.erro };
+        categoryId = nova.categoryId;
+      }
+    }
+
+    const itemId = randomUUID();
+    const productId = randomUUID();
+    const ext = d.pdv?.trim() || 'ORZ-' + Date.now();
+
+    // monta complementos (grupos + opções); cada opção é um produto próprio
+    const optionGroups: any[] = [];
+    const options: any[] = [];
+    const optionProducts: any[] = [];
+    for (const g of d.complementos ?? []) {
+      const groupId = randomUUID();
+      const optIds: string[] = [];
+      for (const o of g.opcoes) {
+        const optId = randomUUID();
+        const optProdId = randomUUID();
+        optIds.push(optId);
+        options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: 'ORZ-OPT-' + optId.slice(0, 8) });
+        optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8) });
+      }
+      optionGroups.push({
+        id: groupId,
+        name: g.grupo,
+        status: 'AVAILABLE',
+        externalCode: 'ORZ-OG-' + groupId.slice(0, 8),
+        optionGroupType: 'INGREDIENTS',
+        min: g.min,
+        max: g.max,
+        optionIds: optIds,
+      });
+    }
+
+    // products: o produto principal (com os grupos associados) + um por opção
+    const products: any[] = [
+      {
+        id: productId,
+        name: d.nome!.trim(),
+        ...(d.descricao ? { description: d.descricao.trim() } : {}),
+        externalCode: ext,
+        optionGroups: optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max })),
+      },
+      ...optionProducts,
+    ];
+
+    const payload = {
+      item: { id: itemId, type: 'DEFAULT', categoryId, productId, status: 'AVAILABLE', externalCode: ext, price: { value: d.preco }, index: 1 },
+      products,
+      optionGroups,
+      options,
+    };
+
+    const r = await this.ifood.putItem(merchantId, payload);
+    if (r.status >= 200 && r.status < 300) return { ok: true, pdv: ext };
+    const e = mapErroIfood(r.status, r.data);
+    this.logger.warn(`criarItem ${e.codigo}: ${e.mensagem}`);
+    return { ok: false, erro: e.mensagem };
   }
 
   // resolve o PDV → item (itemId, productId, categoria) varrendo o catálogo
