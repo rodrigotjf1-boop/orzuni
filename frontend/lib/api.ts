@@ -9,6 +9,12 @@ export interface ItemCardapio {
   status: 'no_ar' | 'pausado';
 }
 
+export interface Shift {
+  inicio: string;
+  fim: string;
+  dias: string[];
+}
+
 export interface ItemDetalhe {
   pdv: string;
   nome: string;
@@ -18,6 +24,7 @@ export interface ItemDetalhe {
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
   complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
+  disponibilidade: Shift[];
 }
 
 export interface Chave {
@@ -73,8 +80,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   cardapio: () => req<{ itens: ItemCardapio[] }>('v1/cardapio'),
   alertas: () => req<{ alertas: Alerta[] }>('v1/vigia/alertas'),
-  reprecos: (itens: Array<{ pdv: string; preco: number; manterPromo?: boolean }>) =>
-    req<{ batchId: string | null; ignorados: string[] }>('v1/precos', {
+  reprecos: (itens: Array<{ pdv: string; preco: number; manterPromo?: boolean }>, contexto?: string) =>
+    req<{ batchId: string | null; ignorados: string[] }>(`v1/precos${contexto ? `?contexto=${encodeURIComponent(contexto)}` : ''}`, {
       method: 'PATCH',
       body: JSON.stringify({ itens }),
     }),
@@ -92,7 +99,9 @@ export const api = {
     preco: number;
     categoria: string;
     complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+    shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
+  contextos: () => req<{ contextos: string[] }>('v1/contextos'),
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {
     listar: () => req<{ chaves: Chave[] }>('v1/chaves'),
@@ -107,7 +116,7 @@ export const api = {
       req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
     remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
-  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado' }) =>
+  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] }) =>
     req<{ ok: boolean; erros: string[] }>(`v1/itens/${encodeURIComponent(pdv)}`, {
       method: 'PATCH',
       body: JSON.stringify(campos),

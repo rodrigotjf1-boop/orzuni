@@ -2,8 +2,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
+import { ShiftsEditor } from '@/components/shifts';
 
 const parse = (v: string) => {
   const n = parseFloat(v.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'));
@@ -25,6 +26,7 @@ export default function NovoItemPage() {
   const [precoStr, setPrecoStr] = useState('');
   const [categoria, setCategoria] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [cats, setCats] = useState<string[]>([]);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -82,6 +84,7 @@ export default function NovoItemPage() {
         complementos: grupos.length
           ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: parse(o.preco) ?? 0 })) }))
           : undefined,
+        shifts: shifts.length ? shifts : undefined,
       });
       if (r.ok) {
         toast('<b style="color:var(--green)">Item criado</b> no iFood ✓');
@@ -173,6 +176,12 @@ export default function NovoItemPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h2 style={{ fontSize: '1.02rem', fontWeight: 700, marginBottom: 6 }}>Disponibilidade</h2>
+        <div className="sub" style={{ marginBottom: 4 }}>Agende por horário e dias da semana (ex.: almoço, seg-sex). Vazio = sempre disponível.</div>
+        <ShiftsEditor shifts={shifts} onChange={setShifts} />
       </div>
 
       {!valido && (nome || precoStr || categoria) && (
