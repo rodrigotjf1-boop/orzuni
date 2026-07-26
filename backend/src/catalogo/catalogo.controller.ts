@@ -52,6 +52,16 @@ export class CatalogoController {
     return this.catalogo.status(await this.merchant(req, loja), pdv, body.status);
   }
 
+  /** PATCH /v1/status — pausa/reativa VÁRIOS itens numa chamada (em massa). */
+  @Patch('status')
+  async statusMassa(
+    @Req() req: any,
+    @Query('loja') loja: string | undefined,
+    @Body() body: { itens: Array<{ pdv: string; status: 'no_ar' | 'pausado' }> },
+  ) {
+    return this.catalogo.statusEmMassa(await this.merchant(req, loja), body.itens ?? []);
+  }
+
   @Get('itens/:pdv')
   async detalhe(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
     const d = await this.catalogo.detalhe(await this.merchant(req, loja), pdv);
