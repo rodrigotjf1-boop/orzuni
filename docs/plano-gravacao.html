@@ -1,0 +1,262 @@
+<title>Plano de gravação — Homologação Catalog iFood · Orzuni</title>
+<style>
+  :root{
+    --paper:#FCFBF8; --ink:#17212B; --muted:#5C6673; --faint:#8A929C;
+    --accent:#CE7C1F; --accent-soft:#FaF0DE; --line:#E7E2D7;
+    --tag-bg:#EEF1F4; --ok:#2E7D5B; --warn:#B5761B; --na:#9AA1A9;
+    --mono:ui-monospace,"SFMono-Regular","Consolas","Menlo",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wrap{max-width:840px;margin:0 auto;padding:40px 32px 64px}
+  h1{font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance;line-height:1.1}
+  h2{font-size:1.02rem;font-weight:800;letter-spacing:.02em;margin:0}
+  .kicker{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 10px}
+  .lead{color:var(--muted);font-size:.96rem;margin:10px 0 0;max-width:62ch}
+  .rule{height:1px;background:var(--line);border:0;margin:26px 0}
+  /* header */
+  header{border-bottom:2px solid var(--ink);padding-bottom:22px}
+  .brand{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap}
+  .brand .mark{font-family:var(--mono);font-size:.68rem;color:var(--faint);letter-spacing:.1em}
+  /* callout */
+  .callout{background:var(--accent-soft);border:1px solid #EAD8B8;border-radius:12px;padding:16px 18px;margin:22px 0}
+  .callout h2{color:var(--warn);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+  .callout ul{margin:0;padding-left:18px}
+  .callout li{margin:4px 0;font-size:.88rem;color:#4A4133}
+  code,.tag{font-family:var(--mono)}
+  code{background:var(--tag-bg);padding:1px 6px;border-radius:5px;font-size:.85em}
+  /* part heading */
+  .part{display:flex;align-items:center;gap:14px;margin:38px 0 14px;page-break-after:avoid;break-after:avoid}
+  .part .n{font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--paper);background:var(--ink);width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+  .part h2{font-size:1.18rem;letter-spacing:-.01em}
+  .part .crit{margin-left:auto;font-family:var(--mono);font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+  /* scenario card */
+  .scn{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px 15px;margin:10px 0;break-inside:avoid;page-break-inside:avoid;background:#fff}
+  .scn .top{display:flex;align-items:flex-start;gap:11px}
+  .box{width:17px;height:17px;border:1.8px solid var(--ink);border-radius:4px;flex:none;margin-top:2px}
+  .scn .ttl{font-weight:700;font-size:.98rem}
+  .scn .id{font-family:var(--mono);font-size:.62rem;color:var(--faint);letter-spacing:.08em}
+  .scn ol{margin:9px 0 0 30px;padding:0;font-size:.9rem;color:#2C353F}
+  .scn ol li{margin:3px 0}
+  .scn .tagline{margin:9px 0 0 30px;font-family:var(--mono);font-size:.66rem;color:var(--accent);letter-spacing:.04em}
+  .scn .tagline::before{content:"↳ prova: "}
+  /* data appendix table */
+  table{width:100%;border-collapse:collapse;font-size:.84rem;margin-top:6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600}
+  td.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .cov td:nth-child(3),.cov th:nth-child(3){text-align:center}
+  .pill{font-family:var(--mono);font-size:.66rem;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .pill.y{background:#E4F1EA;color:var(--ok)}
+  .pill.w{background:#F7ECD5;color:var(--warn)}
+  .pill.n{background:#EEF0F2;color:var(--na)}
+  .imgrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-family:var(--mono);font-size:.72rem;background:var(--tag-bg);border-radius:7px;padding:6px 10px;color:#374049}
+  .foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--faint);font-size:.76rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--accent);text-decoration:none}
+  @media print{
+    .wrap{padding:0 6mm}
+    body{background:#fff}
+    .scn{box-shadow:none}
+    .noprint{display:none}
+    a{color:var(--ink)}
+  }
+  @page{margin:14mm 12mm}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="kicker">Homologação Catalog · iFood — roteiro de gravação</p>
+    <div class="brand">
+      <h1>Plano de gravação dos vídeos</h1>
+      <span class="mark">Orzuni · app.orzuni.com</span>
+    </div>
+    <p class="lead">Cada cenário é uma ação na <strong>interface</strong> — que vira uma requisição real à API. Marque o quadradinho ao concluir. Grave <strong>na ordem</strong>: os cenários finais reaproveitam itens dos primeiros.</p>
+  </header>
+
+  <div class="callout">
+    <h2>Antes de gravar — checklist rápido</h2>
+    <ul>
+      <li><strong>Login</strong> em <code>app.orzuni.com</code> feito.</li>
+      <li>Gravação em <strong>tela cheia</strong>, com <strong>data e hora do computador visíveis</strong>.</li>
+      <li>Informe o <strong>Client ID do app</strong> no chamado (junto com os links dos vídeos).</li>
+      <li>Nada de <code>curl</code> — o iFood cancela a análise. Sempre filme a tela do app.</li>
+      <li>Imagens de teste prontas na pasta <code>docs/imagens-teste/</code> (JPG/PNG ≤ 5 MB).</li>
+    </ul>
+  </div>
+
+  <!-- PARTE A -->
+  <div class="part"><span class="n">A</span><h2>Fundamentos e leitura</h2><span class="crit">critério 1</span></div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">A1 · Autenticação + listar catálogo</div><div class="id">OAuth 2.0 · GET /catalogs · GET /items</div></div></div>
+    <ol><li>Abra o menu <strong>Cardápio</strong>. Os itens reais carregam vindos da API.</li></ol>
+    <div class="tagline">estar autenticado e ler o catálogo/itens existentes.</div>
+  </div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">A2 · Criar categoria + item simples (com foto)</div><div class="id">POST /categories · PUT /items · upload de imagem</div></div></div>
+    <ol>
+      <li>Cardápio → <strong>+ Novo item</strong>.</li>
+      <li>Em <strong>Foto</strong> → Escolher foto → selecione <code>burger.png</code> (mostre o preview e o aviso “JPG ou PNG · até 5 MB”).</li>
+      <li>Nome “X-Salada”, descrição curta, <strong>Preço</strong> — digite os dígitos e veja a máscara formatar <code>R$ 22,90</code>.</li>
+      <li>Em <strong>Categoria</strong> digite uma <strong>nova</strong>: “Lanches Teste”.</li>
+      <li><strong>Criar item</strong> → volte ao Cardápio e mostre o item na categoria nova.</li>
+    </ol>
+    <div class="tagline">criar categoria + item com título/descrição/preço/foto.</div>
+  </div>
+
+  <!-- PARTE B -->
+  <div class="part"><span class="n">B</span><h2>Complementos e estruturas especiais</h2><span class="crit">critério 2</span></div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">B1 · Item com complementos (≥ 2 grupos, min/max)</div><div class="id">PUT /items com optionGroups</div></div></div>
+    <ol>
+      <li>+ Novo item → nome/preço/categoria.</li>
+      <li>Em <strong>Complementos</strong> → <strong>+ Grupo</strong> “Ponto da carne” (mín 1 / máx 1): opções “Mal passado”, “Ao ponto”.</li>
+      <li>+ Grupo “Adicionais” (mín 0 / máx 3): “Bacon” <code>R$ 4,00</code>, “Cheddar” <code>R$ 3,50</code>.</li>
+      <li>Criar → abra o item e mostre os dois grupos.</li>
+    </ol>
+    <div class="tagline">grupos de opções com preços e limites mín/máx.</div>
+  </div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">B2 · Pizza — SIZE / CRUST / EDGE / TOPPING</div><div class="id">type PIZZA · fractions · preço por tamanho</div></div></div>
+    <ol>
+      <li>Cardápio → <strong>+ Pizza</strong>.</li>
+      <li><strong>Tamanhos</strong>: Pequena (4 fatias · máx 1 sabor · R$ 20), Média (8 · 2 · R$ 25), Grande (12 · 2 · R$ 32) — note a <strong>ilustração da pizza fatiada</strong> mudando com o nº de sabores.</li>
+      <li><strong>Massas</strong>: Tradicional (0), Fina (R$ 2). <strong>Bordas</strong>: Tradicional (0), Catupiry (R$ 3). <strong>Sabores</strong>: Calabresa, Margherita.</li>
+      <li>Criar pizza → abra e mostre os <strong>4 grupos</strong>.</li>
+    </ol>
+    <div class="tagline">estrutura de pizza com os 4 grupos obrigatórios.</div>
+  </div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">B3 · Combo — grupo principal + modificador aninhado</div><div class="id">type COMBO_V2 · MAIN · 3º nível</div></div></div>
+    <ol>
+      <li>Cardápio → <strong>+ Combo</strong>.</li>
+      <li>Grupo “Escolha o lanche” (marque <strong>principal</strong>, mín 1/máx 1): “X-Burger” R$ 15 — nele adicione <strong>customização</strong> “Ponto da carne” (especificação: Ao ponto/Bem passado) e “Retirar” (ingredientes: Sem alface); e “X-Bacon” R$ 18.</li>
+      <li>Grupo “Bebida” (mín 1/máx 1): “Coca” R$ 8, “Guaraná” R$ 8.</li>
+      <li>Criar combo → mostre a <strong>customização aninhada</strong> dentro do lanche.</li>
+    </ol>
+    <div class="tagline">combo com grupo principal e modificadores aninhados.</div>
+  </div>
+
+  <!-- PARTE C -->
+  <div class="part"><span class="n">C</span><h2>Operações do dia a dia</h2><span class="crit">critério 3</span></div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C1 · Atualizar preço (reflete em ≤ 2 s)</div><div class="id">Editor → Publicar</div></div></div>
+    <ol><li>Cardápio → clique no <strong>nome</strong> de um item (Editor) → mude o <strong>Preço</strong> (máscara R$) → <strong>Publicar</strong>. Mostre refletindo na hora e no Cardápio.</li></ol>
+    <div class="tagline">atualização de preço + sincronização ≤ 2 s.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C2 · Pausar / reativar item</div><div class="id">status AVAILABLE/UNAVAILABLE</div></div></div>
+    <ol><li>Cardápio → <strong>Pausar</strong> um item → etiqueta “pausado” → <strong>Reativar</strong>.</li></ol>
+    <div class="tagline">atualização de status refletida no catálogo.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C3 · Preço em massa (1 chamada)</div><div class="id">PATCH em lote</div></div></div>
+    <ol><li>Menu <strong>Preços</strong> → edite o preço de <strong>vários</strong> itens (contador “N pendentes”) → <strong>Publicar N preços</strong>.</li></ol>
+    <div class="tagline">atualização de preços de vários itens numa chamada.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C4 · Status em massa (1 chamada)</div><div class="id">PATCH em lote</div></div></div>
+    <ol><li>Cardápio → marque as <strong>caixas</strong> de vários itens → “N selecionados” → <strong>Pausar selecionados</strong> → depois <strong>Reativar</strong>.</li></ol>
+    <div class="tagline">alternar disponibilidade em lote.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C5 · Contexto por canal (mecanismo)</div><div class="id">contextModifiers</div></div></div>
+    <ol><li>Menu <strong>Preços</strong> → mostre o <strong>seletor de canal</strong> (Delivery / Cardápio Digital / Salão) e explique que os preços vão por canal. <em>Ver ressalva.</em></li></ol>
+    <div class="tagline">preços/status por contexto (mecanismo — loja de teste é só Delivery).</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">C6 · Agendamento de disponibilidade (shifts)</div><div class="id">PUT /items com shifts</div></div></div>
+    <ol><li>+ Novo item (ou Editor) → <strong>Disponibilidade</strong> → <strong>+ Janela de horário</strong> → dias seg–sex, 11:00–15:00 → Criar/Publicar → mostre salvo.</li></ol>
+    <div class="tagline">regras de disponibilidade por horário e dia.</div>
+  </div>
+
+  <!-- PARTE D -->
+  <div class="part"><span class="n">D</span><h2>Qualidade, validação e erros</h2><span class="crit">critério 4</span></div>
+
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">D1 · Validação de dados</div><div class="id">título ≤100 · descrição ≤500 · preço &gt; 0</div></div></div>
+    <ol><li>+ Novo item → deixe o <strong>nome vazio</strong> e o <strong>preço em 0</strong> → mostre a <strong>mensagem de erro</strong> (o app não envia inválido). Corrija e crie.</li></ol>
+    <div class="tagline">nenhum payload inválido enviado à API.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">D2 · Tratamento de erro (CONFLICT)</div><div class="id">mensagem clara, sem falha silenciosa</div></div></div>
+    <ol><li>Tente criar um item com um <strong>código de PDV já existente</strong> → mostre a mensagem de <strong>conflito</strong>.</li></ol>
+    <div class="tagline">erros específicos tratados com mensagem compreensível.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">D3 · Multi-idioma + acentos</div><div class="id">pt-BR · es-CO · en-US</div></div></div>
+    <ol><li>Crie itens: “Pão de Alho à Moda” (pt), “Empanada con Ají” (es), “Grilled Chicken” (en) → mostre os acentos corretos no Cardápio.</li></ol>
+    <div class="tagline">títulos em 3 idiomas e caracteres especiais.</div>
+  </div>
+  <div class="scn">
+    <div class="top"><span class="box"></span><div><div class="ttl">D4 · Texto longo (50+ caracteres)</div><div class="id">contador de caracteres</div></div></div>
+    <ol><li>Crie um item com nome/descrição <strong>&gt; 50 caracteres</strong> → mostre o contador (…/100, …/500) e o item salvo.</li></ol>
+    <div class="tagline">itens com títulos/descrições longos.</div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- DADOS DE TESTE -->
+  <div class="part" style="margin-top:8px"><span class="n" style="background:var(--accent)">✎</span><h2>Dados de teste (para digitar rápido)</h2></div>
+  <table>
+    <thead><tr><th>Cenário</th><th>O que digitar</th><th>Imagem</th></tr></thead>
+    <tbody>
+      <tr><td>A2 item</td><td class="mono">X-Salada · R$ 22,90 · cat. “Lanches Teste”</td><td class="mono">burger.png</td></tr>
+      <tr><td>B1 complementos</td><td class="mono">Ponto da carne (1/1) · Adicionais (0/3): Bacon 4,00 · Cheddar 3,50</td><td>—</td></tr>
+      <tr><td>B2 pizza</td><td class="mono">Peq 4/1/20 · Méd 8/2/25 · Gde 12/2/32 · massas Trad/Fina 2 · bordas Trad/Catupiry 3 · sabores Calabresa/Margherita</td><td class="mono">pizza.png</td></tr>
+      <tr><td>B3 combo</td><td class="mono">Lanche(princ): X-Burger 15 (+ Ponto, Retirar) / X-Bacon 18 · Bebida: Coca 8 / Guaraná 8</td><td class="mono">combo.png</td></tr>
+      <tr><td>D3 idiomas</td><td class="mono">Pão de Alho à Moda · Empanada con Ají · Grilled Chicken</td><td class="mono">bebida.png</td></tr>
+    </tbody>
+  </table>
+  <div class="imgrow">
+    <span class="chip">burger.png</span><span class="chip">pizza.png</span><span class="chip">combo.png</span><span class="chip">bebida.png</span><span class="chip">sobremesa.png</span>
+  </div>
+
+  <!-- RESSALVAS -->
+  <div class="callout" style="margin-top:26px">
+    <h2>Ressalvas — diga isto no vídeo ou no ticket</h2>
+    <ul>
+      <li><strong>Contexto por canal:</strong> a loja de teste é <strong>só Delivery</strong> — mostre o mecanismo (seletor de canal); a diferença entre canais exigiria uma loja com Cardápio Digital.</li>
+      <li><strong>Multi-catálogo:</strong> N/A — 1 catálogo (critério “se aplicável”).</li>
+      <li><strong>Retry/backoff, rate-limit, timeout 30 s, concorrência, JSON inválido → 400:</strong> são critérios <strong>de código</strong> (já implementados). Mostre o código só se o analista pedir; não precisam de cena.</li>
+    </ul>
+  </div>
+
+  <!-- COBERTURA -->
+  <div class="part"><span class="n" style="background:var(--accent)">✓</span><h2>Cobertura dos critérios</h2></div>
+  <table class="cov">
+    <thead><tr><th>Critério</th><th>Cenário</th><th>Filma na UI?</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Categorias (POST /categories)</td><td class="mono">A2</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>1 · Item simples (PUT /items)</td><td class="mono">A2</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>1 · Listar/recuperar (GET)</td><td class="mono">A1 · C1</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>2 · Complementos min/max</td><td class="mono">B1</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>2 · Pizza (SIZE/CRUST/EDGE/TOPPING)</td><td class="mono">B2</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>2 · Combo (principal + aninhado)</td><td class="mono">B3</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>3 · Preço em massa</td><td class="mono">C3</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>3 · Status em massa</td><td class="mono">C4</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>3 · Contexto por canal</td><td class="mono">C5</td><td><span class="pill w">mecanismo</span></td></tr>
+      <tr><td>3 · Agendamento (shifts)</td><td class="mono">C6</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>3 · Multi-catálogo</td><td class="mono">—</td><td><span class="pill n">N/A</span></td></tr>
+      <tr><td>4 · Validação</td><td class="mono">D1</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>4 · Tratamento de erros</td><td class="mono">D2</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>4 · Sincronização ≤ 2 s</td><td class="mono">C1 · C2</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>4 · Performance em massa</td><td class="mono">C3 · C4</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>4 · Retry / rate-limit / timeout / concorrência</td><td class="mono">—</td><td><span class="pill n">código</span></td></tr>
+      <tr><td>Multi-idioma + acentos</td><td class="mono">D3</td><td><span class="pill y">sim</span></td></tr>
+      <tr><td>Texto 50+ · campos faltando</td><td class="mono">D4 · D1</td><td><span class="pill y">sim</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="foot">
+    <span>Depois: suba no Google Drive · libere o acesso · cole os links + Client ID no chamado.</span>
+    <span>Orzuni · Catalog v2.0</span>
+  </div>
+</div>

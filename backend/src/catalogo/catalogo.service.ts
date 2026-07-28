@@ -189,7 +189,7 @@ export class CatalogoService {
   async editar(
     merchantId: string,
     pdv: string,
-    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] },
+    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string },
   ): Promise<{ ok: boolean; erros: string[] }> {
     const ref = await this.resolver(merchantId, pdv);
     if (!ref) return { ok: false, erros: ['item não encontrado'] };
@@ -198,10 +198,18 @@ export class CatalogoService {
     if (campos.shifts !== undefined) erros.push(...validarShifts(campos.shifts));
     if (erros.length) return { ok: false, erros };
 
-    if (campos.nome !== undefined || campos.descricao !== undefined) {
+    // foto nova (opcional): sobe e resolve o imagePath antes do PUT /products
+    let imagePath: string | undefined;
+    if (campos.imagem) {
+      imagePath = (await this.ifood.uploadImage(merchantId, campos.imagem)) ?? undefined;
+      if (!imagePath) erros.push('foto');
+    }
+
+    if (campos.nome !== undefined || campos.descricao !== undefined || imagePath) {
       const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
         ...(campos.nome !== undefined ? { name: campos.nome } : {}),
         ...(campos.descricao !== undefined ? { description: campos.descricao } : {}),
+        ...(imagePath ? { imagePath } : {}),
       });
       if (!ok) erros.push('nome/descrição');
     }
@@ -329,12 +337,17 @@ export class CatalogoService {
       });
     }
 
+    // foto (opcional): sobe o data-URI ao iFood e usa o imagePath no produto principal
+    let imagePath: string | undefined;
+    if (d.imagem) imagePath = (await this.ifood.uploadImage(merchantId, d.imagem)) ?? undefined;
+
     // products: o produto principal (com os grupos associados) + um por opção
     const products: any[] = [
       {
         id: productId,
         name: d.nome!.trim(),
         ...(d.descricao ? { description: d.descricao.trim() } : {}),
+        ...(imagePath ? { imagePath } : {}),
         externalCode: ext,
         optionGroups: optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max })),
       },
