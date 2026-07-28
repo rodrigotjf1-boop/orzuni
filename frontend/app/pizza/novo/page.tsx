@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput } from '@/components/money';
+import { usePending } from '@/components/pending-changes';
 
 interface Linha {
   nome: string;
@@ -103,6 +104,7 @@ function Grupo({
 export default function NovaPizzaPage() {
   const router = useRouter();
   const toast = useToast();
+  const { registrar, navegar } = usePending();
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('Pizzas');
   const [pdv, setPdv] = useState('');
@@ -128,8 +130,8 @@ export default function NovaPizzaPage() {
 
   const limpa = (l: Linha[]) => l.filter((x) => x.nome.trim());
 
-  async function salvar() {
-    if (!valido) return;
+  async function salvarInterno(): Promise<boolean> {
+    if (!valido) return false;
     setSalvando(true);
     setErro('');
     try {
@@ -145,21 +147,45 @@ export default function NovaPizzaPage() {
       });
       if (r.ok) {
         toast('<b style="color:var(--green)">Pizza criada</b> no iFood ✓');
-        router.push('/cardapio');
-      } else {
-        setErro(r.erro || 'não foi possível criar');
+        return true;
       }
+      setErro(r.erro || 'não foi possível criar');
+      return false;
     } catch (e: any) {
       setErro(e.message);
+      return false;
     } finally {
       setSalvando(false);
     }
   }
 
+  async function salvar() {
+    if (await salvarInterno()) router.push('/cardapio');
+  }
+
+  // guarda de "começou a criar e não salvou"
+  const comecou = !!(nome.trim() || pdv.trim() || sabores.some((s) => s.nome.trim()) || tamanhos.some((t) => t.preco > 0));
+  const mudancas: string[] = [];
+  if (nome.trim()) mudancas.push(`Nome: ${nome.trim()}`);
+  const nSab = sabores.filter((s) => s.nome.trim()).length;
+  if (nSab) mudancas.push(`${nSab} sabor(es)`);
+  const nTam = tamanhos.filter((t) => t.nome.trim() && t.preco > 0).length;
+  if (nTam) mudancas.push(`${nTam} tamanho(s)`);
+  if (pdv.trim()) mudancas.push(`Código PDV: ${pdv.trim()}`);
+  useEffect(() => {
+    registrar(
+      comecou
+        ? { titulo: 'nova pizza', aviso: 'Você começou a criar uma pizza e ainda não salvou. O que deseja fazer?', mudancas, publicar: salvarInterno, descartar: () => {}, acaoLabel: 'Criar e sair', podePublicar: valido }
+        : null,
+    );
+    return () => registrar(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comecou, valido, mudancas.join('|'), nome, pdv, tamanhos, massas, bordas, sabores, shifts]);
+
   return (
     <>
       <div style={{ marginBottom: 14 }}>
-        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }}>← Cardápio</Link>
+        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }} onClick={(e) => { e.preventDefault(); navegar(() => router.push('/cardapio')); }}>← Cardápio</Link>
       </div>
       <div className="topbar">
         <div>

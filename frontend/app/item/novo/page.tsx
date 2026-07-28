@@ -7,6 +7,7 @@ import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput } from '@/components/money';
 import { ImageUpload } from '@/components/image-upload';
+import { usePending } from '@/components/pending-changes';
 
 interface Grupo {
   grupo: string;
@@ -18,6 +19,7 @@ interface Grupo {
 export default function NovoItemPage() {
   const router = useRouter();
   const toast = useToast();
+  const { registrar, navegar } = usePending();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [preco, setPreco] = useState(0);
@@ -69,8 +71,8 @@ export default function NovoItemPage() {
     setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: x.opcoes.map((o, m) => (m === j ? { ...o, ...patch } : o)) } : x)));
   }
 
-  async function salvar() {
-    if (!valido) return;
+  async function salvarInterno(): Promise<boolean> {
+    if (!valido) return false;
     setSalvando(true);
     setErro('');
     try {
@@ -88,16 +90,40 @@ export default function NovoItemPage() {
       });
       if (r.ok) {
         toast('<b style="color:var(--green)">Item criado</b> no iFood ✓');
-        router.push('/cardapio');
-      } else {
-        setErro(r.erro || 'não foi possível criar');
+        return true;
       }
+      setErro(r.erro || 'não foi possível criar');
+      return false;
     } catch (e: any) {
       setErro(e.message);
+      return false;
     } finally {
       setSalvando(false);
     }
   }
+
+  async function salvar() {
+    if (await salvarInterno()) router.push('/cardapio');
+  }
+
+  // guarda de "começou a criar e não salvou"
+  const comecou = !!(nome.trim() || descricao.trim() || preco > 0 || categoria.trim() || pdv.trim() || imagem || grupos.length || shifts.length);
+  const mudancas: string[] = [];
+  if (nome.trim()) mudancas.push(`Nome: ${nome.trim()}`);
+  if (preco > 0) mudancas.push(`Preço: R$ ${preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+  if (categoria.trim()) mudancas.push(`Categoria: ${categoria.trim()}`);
+  if (grupos.length) mudancas.push(`${grupos.length} grupo(s) de complemento`);
+  if (imagem) mudancas.push('Foto');
+  if (pdv.trim()) mudancas.push(`Código PDV: ${pdv.trim()}`);
+  useEffect(() => {
+    registrar(
+      comecou
+        ? { titulo: 'novo item', aviso: 'Você começou a criar um item e ainda não salvou. O que deseja fazer?', mudancas, publicar: salvarInterno, descartar: () => {}, acaoLabel: 'Criar e sair', podePublicar: valido }
+        : null,
+    );
+    return () => registrar(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comecou, valido, mudancas.join('|'), nome, descricao, preco, categoria, pdv, imagem, grupos, shifts]);
 
   const box = { width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.92rem', padding: '11px 13px' } as const;
   const label = { display: 'block', fontFamily: 'var(--font-mono)', fontSize: '.6rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 7 } as const;
@@ -106,7 +132,7 @@ export default function NovoItemPage() {
   return (
     <>
       <div style={{ marginBottom: 14 }}>
-        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }}>← Cardápio</Link>
+        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }} onClick={(e) => { e.preventDefault(); navegar(() => router.push('/cardapio')); }}>← Cardápio</Link>
       </div>
       <div className="topbar">
         <div>

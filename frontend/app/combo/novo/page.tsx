@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput } from '@/components/money';
+import { usePending } from '@/components/pending-changes';
 
 type Tipo = 'ingredientes' | 'especificacao';
 interface Custom {
@@ -46,6 +47,7 @@ const PrecoInput = ({ v, onChange }: { v: number; onChange: (n: number) => void 
 export default function NovoComboPage() {
   const router = useRouter();
   const toast = useToast();
+  const { registrar, navegar } = usePending();
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('Combos');
   const [pdv, setPdv] = useState('');
@@ -79,8 +81,8 @@ export default function NovoComboPage() {
   });
   const valido = erros.length === 0;
 
-  async function salvar() {
-    if (!valido) return;
+  async function salvarInterno(): Promise<boolean> {
+    if (!valido) return false;
     setSalvando(true);
     setErro('');
     try {
@@ -115,21 +117,45 @@ export default function NovoComboPage() {
       });
       if (r.ok) {
         toast('<b style="color:var(--green)">Combo criado</b> no iFood ✓');
-        router.push('/cardapio');
-      } else {
-        setErro(r.erro || 'não foi possível criar');
+        return true;
       }
+      setErro(r.erro || 'não foi possível criar');
+      return false;
     } catch (e: any) {
       setErro(e.message);
+      return false;
     } finally {
       setSalvando(false);
     }
   }
 
+  async function salvar() {
+    if (await salvarInterno()) router.push('/cardapio');
+  }
+
+  // guarda de "começou a criar e não salvou"
+  const comecou = !!(nome.trim() || pdv.trim() || grupos.some((g) => g.nome.trim() || g.opcoes.some((o) => o.nome.trim())));
+  const mudancas: string[] = [];
+  if (nome.trim()) mudancas.push(`Nome: ${nome.trim()}`);
+  const nGrp = grupos.filter((g) => g.nome.trim()).length;
+  if (nGrp) mudancas.push(`${nGrp} grupo(s)`);
+  const nOpc = grupos.reduce((s, g) => s + g.opcoes.filter((o) => o.nome.trim()).length, 0);
+  if (nOpc) mudancas.push(`${nOpc} opção(ões)`);
+  if (pdv.trim()) mudancas.push(`Código PDV: ${pdv.trim()}`);
+  useEffect(() => {
+    registrar(
+      comecou
+        ? { titulo: 'novo combo', aviso: 'Você começou a criar um combo e ainda não salvou. O que deseja fazer?', mudancas, publicar: salvarInterno, descartar: () => {}, acaoLabel: 'Criar e sair', podePublicar: valido }
+        : null,
+    );
+    return () => registrar(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comecou, valido, mudancas.join('|'), nome, pdv, grupos, shifts]);
+
   return (
     <>
       <div style={{ marginBottom: 14 }}>
-        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }}>← Cardápio</Link>
+        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }} onClick={(e) => { e.preventDefault(); navegar(() => router.push('/cardapio')); }}>← Cardápio</Link>
       </div>
       <div className="topbar">
         <div>
