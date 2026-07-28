@@ -23,7 +23,7 @@ export interface ItemDetalhe {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
-  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number }> }>;
+  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
   disponibilidade: Shift[];
 }
 
@@ -100,7 +100,7 @@ export const api = {
     categoria: string;
     pdv?: string;
     imagem?: string;
-    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
     shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
   criarPizza: (dados: {
@@ -125,7 +125,7 @@ export const api = {
       opcoes: Array<{
         nome: string;
         preco: number;
-        customizacoes?: Array<{ nome: string; tipo: 'ingredientes' | 'especificacao'; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+        customizacoes?: Array<{ nome: string; tipo: 'ingredientes' | 'especificacao'; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
       }>;
     }>;
     shifts?: Shift[];
@@ -145,7 +145,7 @@ export const api = {
       req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
     remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
-  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }> }) =>
+  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }> }) =>
     req<{ ok: boolean; erros: string[]; pdv?: string }>(`v1/itens/${encodeURIComponent(pdv)}`, {
       method: 'PATCH',
       body: JSON.stringify(campos),

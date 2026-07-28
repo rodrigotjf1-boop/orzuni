@@ -91,7 +91,7 @@ export class CatalogoController {
       shifts?: Shift[];
       imagem?: string;
       pdv?: string;
-      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
     },
   ) {
     return this.catalogo.editar(await this.merchant(req, loja), pdv, body);
