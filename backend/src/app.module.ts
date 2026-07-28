@@ -8,6 +8,7 @@ import { ContaModule } from './conta/conta.module';
 import { VigiaModule } from './vigia/vigia.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
 import { AuthModule } from './auth/auth.module';
+import { TelemetriaModule } from './telemetria/telemetria.module';
 
 /**
  * orzuni-api — monólito com o poller do vigia DENTRO da API (@nestjs/schedule).
@@ -17,6 +18,7 @@ import { AuthModule } from './auth/auth.module';
   imports: [
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), // 120 req/min por IP
+    TelemetriaModule,
     StoreModule,
     AuthModule,
     IfoodModule,

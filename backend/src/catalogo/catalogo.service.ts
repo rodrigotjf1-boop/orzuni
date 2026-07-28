@@ -217,32 +217,17 @@ export class CatalogoService {
     if (campos.shifts !== undefined) erros.push(...validarShifts(campos.shifts));
     if (erros.length) return { ok: false, erros };
 
-    // estado atual (o PUT /products é REPLACE — precisamos do produto atual para não
-    // apagar nome/descrição/foto ao mudar só um deles). Reaproveitado no re-PUT abaixo.
+    // estado atual do item (base para o re-PUT que aplica nome/descrição/foto/etc.)
     const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
-    const mainProd: any = flat?.products?.find((p) => p.id === (flat?.item?.productId ?? ref.item.productId)) ?? flat?.products?.[0];
 
-    // foto nova (opcional): sobe e resolve o imagePath
+    // foto nova (opcional): sobe → imagePath RELATIVO (formato do upload e do PUT /items)
     let imagePath: string | undefined;
     if (campos.imagem) {
-      imagePath = (await this.ifood.uploadImage(merchantId, campos.imagem)) ?? undefined;
+      const up = await this.ifood.uploadImage(merchantId, campos.imagem);
+      imagePath = up ? up.replace(/^https?:\/\/[^/]+\//, '') : undefined;
       if (!imagePath) erros.push('foto');
     }
 
-    if (campos.nome !== undefined || campos.descricao !== undefined || imagePath) {
-      // PUT /products é REPLACE e exige name + serving (enum). Reenviar nome/descrição/
-      // serving/foto atuais, sobrescrevendo só o que mudou. imagePath vai RELATIVO
-      // (sem o domínio) — é o formato que o upload devolve e o PUT aceita.
-      const imgBruta = imagePath ?? mainProd?.imagePath;
-      const img = imgBruta ? String(imgBruta).replace(/^https?:\/\/[^/]+\//, '') : undefined;
-      const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
-        name: (campos.nome ?? mainProd?.name ?? ref.nome).trim(),
-        description: campos.descricao ?? mainProd?.description ?? '',
-        serving: mainProd?.serving ?? 'NOT_APPLICABLE',
-        ...(img ? { imagePath: img } : {}),
-      });
-      if (!ok) erros.push(imagePath ? 'foto' : 'nome/descrição');
-    }
     if (campos.preco !== undefined) {
       const r = await this.reprecificar(merchantId, [{ pdv, preco: campos.preco }]);
       if (!r.batchId) erros.push('preço');
@@ -251,11 +236,13 @@ export class CatalogoService {
       const r = await this.status(merchantId, pdv, campos.status);
       if (!r.batchId) erros.push('status');
     }
-    // shifts, novo código PDV e/ou complementos: exigem re-PUT do item (usa o flat como base)
+    // nome/descrição/foto/shifts/PDV/complementos: tudo via re-PUT do item (PUT /items,
+    // que reenvia o PRODUTO COMPLETO e preserva serving/ean/etc. — mais robusto que PUT /products).
     const novoPdv = campos.pdv?.trim();
     const mudouPdv = !!novoPdv && novoPdv !== pdv;
     const mudouCompl = campos.complementos !== undefined;
-    if (campos.shifts !== undefined || mudouPdv || mudouCompl) {
+    const mudouProduto = campos.nome !== undefined || campos.descricao !== undefined || !!imagePath;
+    if (campos.shifts !== undefined || mudouPdv || mudouCompl || mudouProduto) {
       if (flat) {
         // o flat traz campos derivados/read-only (weight com unidade inválida,
         // industrialized) que o PUT rejeita — remover antes de reenviar.
@@ -264,6 +251,14 @@ export class CatalogoService {
           return resto;
         };
         const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
+        // a foto no flat vem como URL completa; o PUT quer relativo
+        principal.forEach((p) => { if (p.imagePath) p.imagePath = String(p.imagePath).replace(/^https?:\/\/[^/]+\//, ''); });
+        // aplica nome/descrição/foto novos no produto principal
+        if (mudouProduto && principal[0]) {
+          if (campos.nome !== undefined) principal[0].name = campos.nome.trim();
+          if (campos.descricao !== undefined) principal[0].description = campos.descricao;
+          if (imagePath) principal[0].imagePath = imagePath;
+        }
         if (mudouPdv) principal.forEach((p) => (p.externalCode = novoPdv)); // relinka o produto ao novo PDV
 
         // por padrão mantém os complementos atuais; se vieram novos, reconstrói tudo (substitui)
@@ -299,10 +294,10 @@ export class CatalogoService {
         const r = await this.ifood.putItem(merchantId, payload);
         if (!(r.status >= 200 && r.status < 300)) {
           const e = mapErroIfood(r.status, r.data);
-          const quem = mudouCompl ? 'complementos' : mudouPdv ? 'código PDV' : 'disponibilidade';
+          const quem = mudouCompl ? 'complementos' : mudouPdv ? 'código PDV' : mudouProduto ? 'nome/descrição/foto' : 'disponibilidade';
           erros.push(`${quem}: ${e.mensagem}`);
         }
-      } else erros.push('complementos/disponibilidade');
+      } else erros.push('não consegui carregar o item para editar');
     }
     return { ok: erros.length === 0, erros, pdv: mudouPdv ? novoPdv : pdv };
   }

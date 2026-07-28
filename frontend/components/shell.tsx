@@ -9,6 +9,7 @@ const NAV = [
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
   { href: '/precos', label: 'Preços', icon: 'price' },
   { href: '/api-erp', label: 'API & ERP', icon: 'api' },
+  { href: '/diagnostico', label: 'Diagnóstico', icon: 'diag' },
 ];
 
 function Icon({ name }: { name: string }) {
@@ -30,6 +31,12 @@ function Icon({ name }: { name: string }) {
     return (
       <svg viewBox="0 0 24 24">
         <path d="M8 7l-4 5 4 5M16 7l4 5-4 5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (name === 'diag')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M3 12h4l2 6 4-14 2 8h6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   return (

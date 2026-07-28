@@ -53,6 +53,18 @@ export interface Alerta {
   foraHaMs: number;
 }
 
+export interface EventoTelemetria {
+  ts: string;
+  nivel: 'error' | 'warn' | 'info';
+  origem: string;
+  acao: string;
+  status?: number;
+  mensagem: string;
+  campo?: string;
+  requestId?: string;
+  merchant?: string;
+}
+
 /** Loja ativa (multi-loja) — escolhida no seletor do topo, guardada no navegador. */
 export function lojaAtiva(): string | null {
   if (typeof localStorage === 'undefined') return null;
@@ -74,6 +86,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
+    // reporta erros HTTP do cliente para a telemetria (fire-and-forget, sem loop)
+    if (!path.startsWith('v1/telemetria')) {
+      fetch('/api/orzuni/v1/telemetria', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: path, mensagem: `${res.status}: ${txt.slice(0, 120)}`, status: res.status }) }).catch(() => {});
+    }
     throw new Error(`${res.status}: ${txt.slice(0, 160)}`);
   }
   return res.json();
@@ -133,6 +149,10 @@ export const api = {
     shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/combos', { method: 'POST', body: JSON.stringify(dados) }),
   contextos: () => req<{ contextos: string[] }>('v1/contextos'),
+  telemetria: {
+    listar: () => req<{ resumo: { total: number; erros: number; ultimo: string | null }; eventos: EventoTelemetria[] }>('v1/telemetria'),
+    limpar: () => req<{ ok: boolean; apagados: number }>('v1/telemetria', { method: 'DELETE' }),
+  },
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {
     listar: () => req<{ chaves: Chave[] }>('v1/chaves'),
