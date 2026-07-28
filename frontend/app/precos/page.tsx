@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { MoneyInput, brl } from '@/components/money';
+import { usePending } from '@/components/pending-changes';
 
 export default function PrecosPage() {
   const [itens, setItens] = useState<ItemCardapio[] | null>(null);
@@ -12,6 +13,7 @@ export default function PrecosPage() {
   const [contextos, setContextos] = useState<string[]>(['DEFAULT']);
   const [canal, setCanal] = useState('DEFAULT');
   const toast = useToast();
+  const { registrar } = usePending();
 
   const CANAL_NOME: Record<string, string> = { DEFAULT: 'Delivery', INDOOR: 'Salão', WHITELABEL: 'Cardápio Digital' };
 
@@ -41,20 +43,46 @@ export default function PrecosPage() {
     setDraft((d) => ({ ...d, [pdv]: valor }));
   }
 
-  async function publicar() {
-    if (!pendentes.length) return;
+  // publica o lote; retorna sucesso (não recarrega — quem chama decide).
+  async function publicarInterno(): Promise<boolean> {
+    if (!pendentes.length) return true;
     setEnviando(true);
     try {
       const r = await api.reprecos(pendentes.map(([pdv, preco]) => ({ pdv, preco })), canal);
       toast(`<b style="color:var(--green)">${pendentes.length} preço(s)</b> publicado(s) em ${CANAL_NOME[canal] ?? canal} · lote ${r.batchId?.slice(0, 8) ?? '—'}`);
-      setDraft({});
-      setTimeout(carregar, 2500);
+      return true;
     } catch (e: any) {
       toast(`Erro ao publicar: ${e.message}`);
+      return false;
     } finally {
       setEnviando(false);
     }
   }
+
+  async function publicar() {
+    const ok = await publicarInterno();
+    if (ok) {
+      setDraft({});
+      setTimeout(carregar, 2500);
+    }
+  }
+
+  // lista legível dos preços em rascunho (para o aviso ao sair)
+  const mudancas = pendentes.map(([pdv, v]) => {
+    const it = itens?.find((i) => i.pdv === pdv);
+    return `${it?.nome ?? pdv}: R$ ${brl(it?.preco ?? 0)} → R$ ${brl(v)}`;
+  });
+
+  // registra a pendência para o guard (avisa ao trocar de tela sem publicar)
+  useEffect(() => {
+    registrar(
+      pendentes.length
+        ? { titulo: `preços (${pendentes.length} ${pendentes.length > 1 ? 'itens' : 'item'})`, mudancas, publicar: publicarInterno, descartar: () => setDraft({}) }
+        : null,
+    );
+    return () => registrar(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendentes, canal, itens]);
 
   return (
     <>
