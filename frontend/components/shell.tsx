@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, lojaAtiva, setLojaAtiva, type Loja } from '@/lib/api';
+import { usePending } from '@/components/pending-changes';
 
 const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
@@ -48,6 +49,8 @@ function Icon({ name }: { name: string }) {
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const router = useRouter();
+  const { navegar } = usePending();
   const [lojas, setLojas] = useState<Loja[]>([]);
   const [loja, setLoja] = useState<string | null>(null);
 
@@ -61,8 +64,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   }, [path]);
 
   function trocarLoja(m: string) {
-    setLojaAtiva(m || null);
-    window.location.reload();
+    navegar(() => {
+      setLojaAtiva(m || null);
+      window.location.reload();
+    });
   }
 
   // loja iFood conectada (para o indicador). Nome genérico "loja" vira "Loja iFood".
@@ -73,9 +78,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   // o login não usa o shell (sem sidebar)
   if (path === '/login') return <>{children}</>;
 
-  async function sair() {
-    await fetch('/api/auth', { method: 'DELETE' });
-    window.location.href = '/login';
+  function sair() {
+    navegar(async () => {
+      await fetch('/api/auth', { method: 'DELETE' });
+      window.location.href = '/login';
+    });
   }
   return (
     <div className="shell">
@@ -112,7 +119,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </select>
         )}
         {NAV.map((n) => (
-          <Link key={n.href} href={n.href} className={`nav-item${path.startsWith(n.href) ? ' active' : ''}`}>
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`nav-item${path.startsWith(n.href) ? ' active' : ''}`}
+            onClick={(e) => {
+              if (path.startsWith(n.href)) return; // já está na tela
+              e.preventDefault();
+              navegar(() => router.push(n.href));
+            }}
+          >
             <Icon name={n.icon} />
             <span>{n.label}</span>
           </Link>
