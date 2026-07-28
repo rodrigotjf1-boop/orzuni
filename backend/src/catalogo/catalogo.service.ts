@@ -25,7 +25,7 @@ export interface ItemDetalhe {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
-  complementos: Array<{ grupo: string; obrigatorio: boolean; opcoes: Array<{ nome: string; status: string }> }>;
+  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number }> }>;
   disponibilidade: Shift[];
 }
 
@@ -158,11 +158,13 @@ export class CatalogoService {
     const complementos = (flat?.optionGroups ?? []).map((g) => ({
       grupo: g.name,
       obrigatorio: (g.min ?? 0) > 0,
+      min: g.min ?? 0,
+      max: g.max ?? 0,
       opcoes: (g.optionIds ?? []).map((oid) => {
         const o = flat?.options?.find((x) => x.id === oid);
         // o nome legível está no PRODUTO da opção; externalCode/id são só fallback
         const prod = flat?.products?.find((p) => p.id === o?.productId);
-        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado' };
+        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', preco: o?.price?.value ?? 0 };
       }),
     }));
     return {
@@ -191,7 +193,16 @@ export class CatalogoService {
   async editar(
     merchantId: string,
     pdv: string,
-    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string },
+    campos: {
+      nome?: string;
+      descricao?: string;
+      preco?: number;
+      status?: 'no_ar' | 'pausado';
+      shifts?: Shift[];
+      imagem?: string;
+      pdv?: string;
+      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+    },
   ): Promise<{ ok: boolean; erros: string[]; pdv?: string }> {
     const ref = await this.resolver(merchantId, pdv);
     if (!ref) return { ok: false, erros: ['item não encontrado'] };
@@ -223,10 +234,11 @@ export class CatalogoService {
       const r = await this.status(merchantId, pdv, campos.status);
       if (!r.batchId) erros.push('status');
     }
-    // shifts e/ou novo código PDV: exigem re-PUT do item completo (usa o flat como base)
+    // shifts, novo código PDV e/ou complementos: exigem re-PUT do item (usa o flat como base)
     const novoPdv = campos.pdv?.trim();
     const mudouPdv = !!novoPdv && novoPdv !== pdv;
-    if (campos.shifts !== undefined || mudouPdv) {
+    const mudouCompl = campos.complementos !== undefined;
+    if (campos.shifts !== undefined || mudouPdv || mudouCompl) {
       const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
       if (flat) {
         // o flat traz campos derivados/read-only (weight com unidade inválida,
@@ -235,10 +247,22 @@ export class CatalogoService {
           const { weight, industrialized, ...resto } = p;
           return resto;
         };
-        // só o produto PRINCIPAL vai em products[]; produtos das opções podem ser
-        // industrializados de outro dono (não atualizáveis). As opções apenas os referenciam.
         const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
         if (mudouPdv) principal.forEach((p) => (p.externalCode = novoPdv)); // relinka o produto ao novo PDV
+
+        // por padrão mantém os complementos atuais; se vieram novos, reconstrói tudo (substitui)
+        let optionGroups: any[] = flat.optionGroups ?? [];
+        let options: any[] = flat.options ?? [];
+        let products: any[] = principal.length ? principal : (flat.products ?? []).map(limpar);
+        if (mudouCompl) {
+          const built = this.montarComplementos(campos.complementos);
+          const main = { ...(principal[0] ?? limpar(flat.products?.[0])) };
+          main.optionGroups = built.optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max }));
+          optionGroups = built.optionGroups;
+          options = built.options;
+          products = [main, ...built.optionProducts];
+        }
+
         const cm = (flat.item as any).contextModifiers;
         const payload = {
           item: {
@@ -252,16 +276,17 @@ export class CatalogoService {
               : {}),
             ...(campos.shifts !== undefined ? { shifts: toIfoodShifts(campos.shifts) ?? [] } : {}),
           },
-          products: principal.length ? principal : (flat.products ?? []).map(limpar),
-          optionGroups: flat.optionGroups,
-          options: flat.options,
+          products,
+          optionGroups,
+          options,
         };
         const r = await this.ifood.putItem(merchantId, payload);
         if (!(r.status >= 200 && r.status < 300)) {
           const e = mapErroIfood(r.status, r.data);
-          erros.push(mudouPdv ? 'código PDV: ' + e.mensagem : 'disponibilidade');
+          const quem = mudouCompl ? 'complementos' : mudouPdv ? 'código PDV' : 'disponibilidade';
+          erros.push(`${quem}: ${e.mensagem}`);
         }
-      } else erros.push(campos.shifts !== undefined ? 'disponibilidade' : 'código PDV');
+      } else erros.push('complementos/disponibilidade');
     }
     return { ok: erros.length === 0, erros, pdv: mudouPdv ? novoPdv : pdv };
   }
@@ -310,6 +335,37 @@ export class CatalogoService {
     return { ok: true, categoryId: nova.categoryId };
   }
 
+  /** Monta grupos/opções/produtos de complemento a partir do modelo canônico. */
+  private montarComplementos(
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>,
+  ) {
+    const optionGroups: any[] = [];
+    const options: any[] = [];
+    const optionProducts: any[] = [];
+    for (const g of complementos ?? []) {
+      const groupId = randomUUID();
+      const optIds: string[] = [];
+      for (const o of g.opcoes) {
+        const optId = randomUUID();
+        const optProdId = randomUUID();
+        optIds.push(optId);
+        options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: 'ORZ-OPT-' + optId.slice(0, 8) });
+        optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8) });
+      }
+      optionGroups.push({
+        id: groupId,
+        name: g.grupo,
+        status: 'AVAILABLE',
+        externalCode: 'ORZ-OG-' + groupId.slice(0, 8),
+        optionGroupType: 'INGREDIENTS',
+        min: g.min,
+        max: g.max,
+        optionIds: optIds,
+      });
+    }
+    return { optionGroups, options, optionProducts };
+  }
+
   /**
    * Cria um item (PUT /items), com produto + complementos opcionais. Valida antes
    * (título/descrição/preço) e traduz erros. Se `categoria` vier por nome e não
@@ -331,30 +387,7 @@ export class CatalogoService {
     const ext = d.pdv?.trim() || 'ORZ-' + Date.now();
 
     // monta complementos (grupos + opções); cada opção é um produto próprio
-    const optionGroups: any[] = [];
-    const options: any[] = [];
-    const optionProducts: any[] = [];
-    for (const g of d.complementos ?? []) {
-      const groupId = randomUUID();
-      const optIds: string[] = [];
-      for (const o of g.opcoes) {
-        const optId = randomUUID();
-        const optProdId = randomUUID();
-        optIds.push(optId);
-        options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: 'ORZ-OPT-' + optId.slice(0, 8) });
-        optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8) });
-      }
-      optionGroups.push({
-        id: groupId,
-        name: g.grupo,
-        status: 'AVAILABLE',
-        externalCode: 'ORZ-OG-' + groupId.slice(0, 8),
-        optionGroupType: 'INGREDIENTS',
-        min: g.min,
-        max: g.max,
-        optionIds: optIds,
-      });
-    }
+    const { optionGroups, options, optionProducts } = this.montarComplementos(d.complementos);
 
     // foto (opcional): sobe o data-URI ao iFood e usa o imagePath no produto principal
     let imagePath: string | undefined;

@@ -7,6 +7,10 @@ import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput, brl } from '@/components/money';
 import { ImageUpload } from '@/components/image-upload';
+import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
+
+const normCompl = (cs: ItemDetalhe['complementos']): GrupoCompl[] =>
+  cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco })) }));
 
 export default function EditorPage() {
   const { pdv } = useParams<{ pdv: string }>();
@@ -24,6 +28,7 @@ export default function EditorPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [imagem, setImagem] = useState<string | null>(null); // só quando trocada
   const [pdvNovo, setPdvNovo] = useState('');
+  const [grupos, setGrupos] = useState<GrupoCompl[]>([]);
 
   const carregar = useCallback(async () => {
     try {
@@ -36,6 +41,7 @@ export default function EditorPage() {
       setShifts(d.disponibilidade ?? []);
       setImagem(null);
       setPdvNovo(d.pdv);
+      setGrupos(normCompl(d.complementos ?? []));
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -48,9 +54,10 @@ export default function EditorPage() {
 
   const shiftsMudou = !!det && JSON.stringify(shifts) !== JSON.stringify(det.disponibilidade ?? []);
   const pdvMudou = !!pdvNovo.trim() && pdvNovo.trim() !== pdv;
+  const complMudou = !!det && JSON.stringify(grupos) !== JSON.stringify(normCompl(det.complementos ?? []));
   const dirty =
     !!det &&
-    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem || pdvMudou);
+    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem || pdvMudou || complMudou);
 
   async function salvar() {
     if (!det || !dirty) return;
@@ -63,6 +70,10 @@ export default function EditorPage() {
     if (shiftsMudou) campos.shifts = shifts;
     if (imagem) campos.imagem = imagem;
     if (pdvMudou) campos.pdv = pdvNovo.trim();
+    if (complMudou)
+      campos.complementos = grupos
+        .filter((g) => g.grupo.trim())
+        .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco })) }));
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
@@ -178,35 +189,12 @@ export default function EditorPage() {
           </div>
 
           <div className="card">
-            <div className="mono" style={{ color: 'var(--dim)', marginBottom: 14 }}>
-              complementos ({det.complementos.length})
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+              <div className="mono" style={{ color: 'var(--dim)' }}>complementos ({grupos.length})</div>
+              {complMudou && <span className="mono" style={{ fontSize: '.55rem', color: 'var(--tanger)' }}>alterado</span>}
             </div>
-            {det.complementos.length === 0 && <div className="sub" style={{ margin: 0 }}>Este item não tem complementos.</div>}
-            {det.complementos.map((g) => (
-              <div key={g.grupo} style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--ink2)', marginBottom: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 13px', borderBottom: '1px solid var(--line)' }}>
-                  <b style={{ fontSize: '.9rem' }}>{g.grupo}</b>
-                  {g.obrigatorio && (
-                    <span className="mono" style={{ marginLeft: 'auto', fontSize: '.55rem', color: 'var(--tanger)', background: 'rgba(255,162,38,.13)', padding: '4px 8px', borderRadius: 99 }}>
-                      obrigatório
-                    </span>
-                  )}
-                </div>
-                {g.opcoes.map((o, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px', borderTop: i ? '1px solid var(--line)' : 0 }}>
-                    <span className="mono" style={{ fontSize: '.7rem', color: 'var(--dim)', textTransform: 'none' }}>
-                      {o.nome}
-                    </span>
-                    <span className={`pill ${o.status === 'no_ar' ? 'on' : 'off'}`} style={{ marginLeft: 'auto' }}>
-                      {o.status === 'no_ar' ? 'no ar' : 'pausado'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-            <div className="sub" style={{ marginTop: 12, fontSize: '.72rem' }}>
-              Edição dos complementos: em breve.
-            </div>
+            <ComplementosEditor grupos={grupos} onChange={setGrupos} />
+            <div className="sub" style={{ marginTop: 10, fontSize: '.68rem' }}>Editar aqui substitui os complementos do item ao publicar.</div>
 
             <div style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 16 }}>
               <div className="mono" style={{ color: 'var(--dim)', marginBottom: 8 }}>disponibilidade</div>
