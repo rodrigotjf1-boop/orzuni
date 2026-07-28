@@ -101,6 +101,16 @@ export const api = {
     complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
     shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
+  criarPizza: (dados: {
+    nome: string;
+    categoria: string;
+    pdv?: string;
+    tamanhos: Array<{ nome: string; preco: number; pedacos?: number; maxSabores?: number }>;
+    massas: Array<{ nome: string; preco?: number }>;
+    bordas?: Array<{ nome: string; preco?: number }>;
+    sabores: Array<{ nome: string; preco?: number }>;
+    shifts?: Shift[];
+  }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/pizzas', { method: 'POST', body: JSON.stringify(dados) }),
   criarCombo: (dados: {
     nome: string;
     categoria: string;

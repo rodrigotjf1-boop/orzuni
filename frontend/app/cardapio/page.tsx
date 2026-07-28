@@ -91,6 +91,9 @@ export default function CardapioPage() {
           <Link href="/item/novo" className="btn" style={{ whiteSpace: 'nowrap' }}>
             + Novo item
           </Link>
+          <Link href="/pizza/novo" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
+            + Pizza
+          </Link>
           <Link href="/combo/novo" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
             + Combo
           </Link>

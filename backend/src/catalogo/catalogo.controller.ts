@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
-import type { DadosItem, DadosCombo, Shift } from './validacao';
+import type { DadosItem, DadosPizza, DadosCombo, Shift } from './validacao';
 
 /**
  * API aberta do catálogo — modelo CANÔNICO (o ERP não conhece "iFood" nem ids).
@@ -97,6 +97,12 @@ export class CatalogoController {
   @Post('itens')
   async criarItem(@Req() req: any, @Body() body: DadosItem & { loja?: string }) {
     return this.catalogo.criarItem(await this.merchant(req, body.loja), body);
+  }
+
+  /** POST /v1/pizzas — cria uma pizza (type PIZZA, 4 grupos SIZE/CRUST/EDGE/TOPPING). */
+  @Post('pizzas')
+  async criarPizza(@Req() req: any, @Body() body: DadosPizza & { loja?: string }) {
+    return this.catalogo.criarPizza(await this.merchant(req, body.loja), body);
   }
 
   /** POST /v1/combos — cria um combo (type COMBO_V2, grupo principal + aninhados). */

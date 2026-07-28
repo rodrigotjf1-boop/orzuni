@@ -6,11 +6,13 @@ import {
   validarItem,
   validarCategoria,
   validarShifts,
+  validarPizza,
   validarCombo,
   toIfoodShifts,
   fromIfoodShifts,
   mapErroIfood,
   type DadosItem,
+  type DadosPizza,
   type DadosCombo,
   type Shift,
 } from './validacao';
@@ -361,6 +363,139 @@ export class CatalogoService {
     if (r.status >= 200 && r.status < 300) return { ok: true, pdv: ext };
     const e = mapErroIfood(r.status, r.data);
     this.logger.warn(`criarItem ${e.codigo}: ${e.mensagem}`);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Cria uma PIZZA (type PIZZA) com os 4 grupos obrigatórios SIZE/CRUST/EDGE/TOPPING.
+   * Preço-base no tamanho; `fractions` = quantos sabores o tamanho aceita; `quantity`
+   * = fatias. Se `bordas` vier vazio, cria uma "Tradicional" grátis (o grupo EDGE é
+   * obrigatório na estrutura). Categoria criada com template PIZZA. Ver docs/pizza-combo-shape.md.
+   */
+  async criarPizza(merchantId: string, d: DadosPizza): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
+    const erros = [...validarPizza(d), ...validarShifts(d.shifts)];
+    if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
+
+    // Pizza: NUNCA enviar categoryId — a API gerencia a (única) categoria PIZZA da loja
+    // sozinha. Passar categoryId (mesmo o da categoria PIZZA existente) devolve 409.
+    // Ver docs/pizza-combo-shape.md.
+    const itemId = randomUUID();
+    const productId = randomUUID();
+    const ext = d.pdv?.trim() || 'ORZ-PIZ-' + randomUUID().slice(0, 8);
+
+    const products: any[] = [];
+    const optionGroups: any[] = [];
+    const options: any[] = [];
+
+    const bordas = d.bordas?.length ? d.bordas : [{ nome: 'Tradicional', preco: 0 }];
+    const contextos = cat.context?.length ? cat.context : ['DEFAULT'];
+
+    // grupo simples (SIZE/CRUST/EDGE): 1 produto + 1 opção por item. Devolve os ids das opções.
+    // `fractions` (número 1..4) é obrigatório em TODA opção; no tamanho = quantos sabores aceita.
+    const grupoSimples = (
+      nome: string,
+      tipo: 'SIZE' | 'CRUST' | 'EDGE',
+      itens: Array<{ nome: string; preco?: number; pedacos?: number; maxSabores?: number }>,
+    ) => {
+      const groupId = randomUUID();
+      const optionIds: string[] = [];
+      itens.forEach((it, i) => {
+        const optId = randomUUID();
+        const prodId = randomUUID();
+        optionIds.push(optId);
+        products.push({
+          id: prodId,
+          name: it.nome.trim(),
+          externalCode: 'ORZ-PP-' + prodId.slice(0, 8),
+          ...(tipo === 'SIZE' && it.pedacos ? { quantity: it.pedacos } : {}),
+        });
+        const fractions =
+          tipo === 'SIZE'
+            ? Array.from({ length: Math.min(4, Math.max(1, it.maxSabores ?? 1)) }, (_, k) => k + 1)
+            : [1];
+        options.push({
+          id: optId,
+          productId: prodId,
+          status: 'AVAILABLE',
+          index: i,
+          price: { value: it.preco ?? 0 },
+          externalCode: 'ORZ-PO-' + optId.slice(0, 8),
+          fractions,
+          contextModifiers: [],
+        });
+      });
+      optionGroups.push({ id: groupId, name: nome, status: 'AVAILABLE', externalCode: 'ORZ-OG-' + groupId.slice(0, 8), optionGroupType: tipo, optionIds });
+      return { id: groupId, optionIds };
+    };
+
+    const gSize = grupoSimples('Tamanho', 'SIZE', d.tamanhos!);
+    const gCrust = grupoSimples('Massa', 'CRUST', d.massas!);
+    const gEdge = grupoSimples('Borda', 'EDGE', bordas);
+
+    // TOPPING: cada sabor = 1 opção, ligada a TODOS os tamanhos (× contextos) via
+    // contextModifiers[].parentOptionId — é o que o iFood cobra ("linked with all sizes
+    // in all contexts"). O preço adicional do sabor vai em cada contexto/tamanho.
+    const toppingGroupId = randomUUID();
+    const toppingOptIds: string[] = [];
+    d.sabores!.forEach((s, si) => {
+      const prodId = randomUUID();
+      const optId = randomUUID();
+      toppingOptIds.push(optId);
+      products.push({ id: prodId, name: s.nome.trim(), externalCode: 'ORZ-PP-' + prodId.slice(0, 8) });
+      const preco = s.preco ?? 0;
+      const contextModifiers: any[] = [];
+      for (const ctx of contextos)
+        for (const sizeOptId of gSize.optionIds)
+          contextModifiers.push({ status: 'AVAILABLE', price: { value: preco }, catalogContext: ctx, parentOptionId: sizeOptId });
+      options.push({
+        id: optId,
+        productId: prodId,
+        status: 'AVAILABLE',
+        index: si,
+        price: { value: preco },
+        externalCode: 'ORZ-PO-' + optId.slice(0, 8),
+        fractions: [1],
+        contextModifiers,
+      });
+    });
+    optionGroups.push({ id: toppingGroupId, name: 'Sabor', status: 'AVAILABLE', externalCode: 'ORZ-OG-' + toppingGroupId.slice(0, 8), optionGroupType: 'TOPPING', optionIds: toppingOptIds });
+    const gTopping = { id: toppingGroupId };
+
+    // produto principal referencia os 4 grupos (EDGE é opcional para o cliente → min 0)
+    products.unshift({
+      id: productId,
+      name: d.nome!.trim(),
+      externalCode: ext,
+      optionGroups: [
+        { id: gSize.id, min: 1, max: 1 },
+        { id: gCrust.id, min: 1, max: 1 },
+        { id: gEdge.id, min: 0, max: 1 },
+        { id: gTopping.id, min: 1, max: 1 },
+      ],
+    });
+
+    const shifts = toIfoodShifts(d.shifts);
+    const payload = {
+      item: {
+        id: itemId,
+        type: 'PIZZA',
+        productId,
+        status: 'AVAILABLE',
+        externalCode: ext,
+        index: 1,
+        ...(shifts ? { shifts } : {}),
+      },
+      products,
+      optionGroups,
+      options,
+    };
+
+    const r = await this.ifood.putItem(merchantId, payload);
+    if (r.status >= 200 && r.status < 300) return { ok: true, pdv: ext };
+    const e = mapErroIfood(r.status, r.data);
+    this.logger.warn(`criarPizza ${e.codigo}: ${e.mensagem}`);
     return { ok: false, erro: e.mensagem };
   }
 
