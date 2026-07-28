@@ -8,6 +8,7 @@ import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput, brl } from '@/components/money';
 import { ImageUpload } from '@/components/image-upload';
 import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
+import { usePending } from '@/components/pending-changes';
 
 const normCompl = (cs: ItemDetalhe['complementos']): GrupoCompl[] =>
   cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco, pdv: o.pdv })) }));
@@ -16,6 +17,7 @@ export default function EditorPage() {
   const { pdv } = useParams<{ pdv: string }>();
   const router = useRouter();
   const toast = useToast();
+  const { registrar, navegar } = usePending();
   const [det, setDet] = useState<ItemDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -61,8 +63,22 @@ export default function EditorPage() {
     !!det &&
     (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem || pdvMudou || complMudou);
 
-  async function salvar() {
-    if (!det || !dirty) return;
+  // lista legível das alterações pendentes (para o aviso ao sair)
+  const mudancas: string[] = [];
+  if (det) {
+    if (nome !== det.nome) mudancas.push('Nome');
+    if (descricao !== det.descricao) mudancas.push('Descrição');
+    if (Math.abs(preco - det.preco) >= 0.005) mudancas.push(`Preço (R$ ${brl(preco)})`);
+    if (status !== det.status) mudancas.push(`Disponibilidade → ${status === 'no_ar' ? 'no ar' : 'pausado'}`);
+    if (shiftsMudou) mudancas.push('Horários de disponibilidade');
+    if (imagem) mudancas.push('Foto');
+    if (pdvMudou) mudancas.push(`Código PDV → ${pdvNovo.trim()}`);
+    if (complMudou) mudancas.push('Complementos');
+  }
+
+  // faz o PATCH; retorna sucesso. NÃO navega (quem chama decide o que fazer depois).
+  async function salvarInterno(): Promise<boolean> {
+    if (!det || !dirty) return true;
     setSalvando(true);
     const campos: any = {};
     if (nome !== det.nome) campos.nome = nome;
@@ -80,19 +96,32 @@ export default function EditorPage() {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
         toast('<b style="color:var(--green)">Item publicado</b> no iFood ✓');
-        // se o código PDV mudou, o item passa a ser identificado pelo novo código
-        if (r.pdv && r.pdv !== pdv) setTimeout(() => router.replace(`/item/${encodeURIComponent(r.pdv!)}`), 1500);
-        else setTimeout(carregar, 2500);
-      } else {
-        toast(`Publicado parcialmente. Falhou: ${r.erros.join(', ')}`);
-        setTimeout(carregar, 2500);
+        return true;
       }
+      toast(`Publicado parcialmente. Falhou: ${r.erros.join(', ')}`);
+      return false;
     } catch (e: any) {
       toast(`Erro: ${e.message}`);
+      return false;
     } finally {
       setSalvando(false);
     }
   }
+
+  // botão "Publicar alterações": salva e recarrega (ou navega se o PDV mudou)
+  async function salvar() {
+    const ok = await salvarInterno();
+    if (ok && pdvMudou) setTimeout(() => router.replace(`/item/${encodeURIComponent(pdvNovo.trim())}`), 1200);
+    else setTimeout(carregar, 2500);
+  }
+
+  // registra a pendência para o guard (avisa ao trocar de tela/sair sem publicar)
+  useEffect(() => {
+    registrar(dirty ? { titulo: det?.nome || `item ${pdv}`, mudancas, publicar: salvarInterno, descartar: carregar } : null);
+    return () => registrar(null);
+    // re-registra com o fechamento mais recente sempre que algo relevante muda
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, mudancas.join('|'), nome, descricao, preco, status, imagem, pdvNovo, shifts, grupos, det]);
 
   const box = {
     width: '100%',
@@ -109,7 +138,7 @@ export default function EditorPage() {
   return (
     <>
       <div style={{ marginBottom: 14 }}>
-        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }}>
+        <Link href="/cardapio" className="sub" style={{ color: 'var(--dim)' }} onClick={(e) => { e.preventDefault(); navegar(() => router.push('/cardapio')); }}>
           ← Cardápio
         </Link>
       </div>
