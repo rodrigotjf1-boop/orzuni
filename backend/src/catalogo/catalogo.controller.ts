@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
-import type { DadosItem, Shift } from './validacao';
+import type { DadosItem, DadosCombo, Shift } from './validacao';
 
 /**
  * API aberta do catálogo — modelo CANÔNICO (o ERP não conhece "iFood" nem ids).
@@ -97,6 +97,12 @@ export class CatalogoController {
   @Post('itens')
   async criarItem(@Req() req: any, @Body() body: DadosItem & { loja?: string }) {
     return this.catalogo.criarItem(await this.merchant(req, body.loja), body);
+  }
+
+  /** POST /v1/combos — cria um combo (type COMBO_V2, grupo principal + aninhados). */
+  @Post('combos')
+  async criarCombo(@Req() req: any, @Body() body: DadosCombo & { loja?: string }) {
+    return this.catalogo.criarCombo(await this.merchant(req, body.loja), body);
   }
 
   @Get('lotes/:batchId')
