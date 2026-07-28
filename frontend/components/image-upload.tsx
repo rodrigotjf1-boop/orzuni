@@ -1,16 +1,61 @@
 'use client';
 import { useRef, useState } from 'react';
 
+// O upload do iFood retorna 500 com imagens pesadas (ex.: 4500×3000 ou ~5 MB).
+// Redimensionamos e comprimimos em JPEG no cliente até o payload ficar leve.
+const ALVO = 1_400_000; // ~1 MB de payload base64 (o iFood aceita bem abaixo do que quebra)
+
+/** Redimensiona + comprime (JPEG) reduzindo dimensão/qualidade até caber; devolve o data-URI. */
+function processar(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const render = (max: number, q: number): string | null => {
+        let { width, height } = img;
+        const maior = Math.max(width, height);
+        if (maior > max) {
+          const s = max / maior;
+          width = Math.round(width * s);
+          height = Math.round(height * s);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(img, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', q);
+      };
+      // tenta progressivamente menor/mais comprimido até o payload ficar leve
+      const tentativas: Array<[number, number]> = [[1600, 0.82], [1400, 0.75], [1200, 0.68], [1000, 0.6], [800, 0.55]];
+      for (const [max, q] of tentativas) {
+        const uri = render(max, q);
+        if (!uri) return reject(new Error('canvas'));
+        if (uri.length <= ALVO || max === 800) return resolve(uri);
+      }
+      reject(new Error('canvas'));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('imagem inválida'));
+    };
+    img.src = url;
+  });
+}
+
 /**
  * Seletor de imagem com os limites do iFood: **JPG/JPEG/PNG, até 5 MB**.
- * Valida no cliente (tipo + tamanho), mostra preview e devolve o data-URI base64
- * (formato que o endpoint de upload do iFood espera). onPick(null) = removida.
+ * Redimensiona no cliente (máx. 1600px, JPEG) — evita o 500 do upload do iFood
+ * com fotos de alta resolução — e devolve o data-URI. onPick(null) = removida.
  */
 export function ImageUpload({ value, onPick }: { value?: string | null; onPick: (dataUri: string | null) => void }) {
   const [erro, setErro] = useState('');
+  const [processando, setProcessando] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
-  function handle(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handle(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setErro('');
@@ -18,14 +63,18 @@ export function ImageUpload({ value, onPick }: { value?: string | null; onPick: 
       setErro('Formato inválido — use JPG ou PNG.');
       return;
     }
-    if (f.size > 5 * 1024 * 1024) {
-      setErro(`Imagem muito grande (${(f.size / 1024 / 1024).toFixed(1)} MB) — máximo 5 MB.`);
+    if (f.size > 15 * 1024 * 1024) {
+      setErro(`Arquivo muito grande (${(f.size / 1024 / 1024).toFixed(1)} MB).`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => onPick(reader.result as string);
-    reader.onerror = () => setErro('Não consegui ler o arquivo.');
-    reader.readAsDataURL(f);
+    setProcessando(true);
+    try {
+      onPick(await processar(f));
+    } catch {
+      setErro('Não consegui processar a imagem.');
+    } finally {
+      setProcessando(false);
+    }
   }
 
   function remover() {
@@ -59,15 +108,15 @@ export function ImageUpload({ value, onPick }: { value?: string | null; onPick: 
         </div>
         <div>
           <input ref={ref} type="file" accept="image/jpeg,image/png" onChange={handle} style={{ display: 'none' }} id="img-upl" />
-          <button className="btn ghost mini" onClick={() => ref.current?.click()}>
-            {value ? 'Trocar foto' : 'Escolher foto'}
+          <button className="btn ghost mini" disabled={processando} onClick={() => ref.current?.click()}>
+            {processando ? 'Processando…' : value ? 'Trocar foto' : 'Escolher foto'}
           </button>
           {value && (
             <button className="btn ghost mini" style={{ marginLeft: 8 }} onClick={remover}>
               Remover
             </button>
           )}
-          <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>JPG ou PNG · até 5 MB</div>
+          <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>JPG ou PNG · ajustamos o tamanho automaticamente</div>
         </div>
       </div>
       {erro && <div className="sub" style={{ marginTop: 8, color: 'var(--coral)' }}>{erro}</div>}
