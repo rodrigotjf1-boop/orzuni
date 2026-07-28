@@ -5,12 +5,8 @@ import Link from 'next/link';
 import { api, type ItemDetalhe, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
-
-const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const parse = (v: string) => {
-  const n = parseFloat(v.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'));
-  return isNaN(n) ? null : n;
-};
+import { MoneyInput, brl } from '@/components/money';
+import { ImageUpload } from '@/components/image-upload';
 
 export default function EditorPage() {
   const { pdv } = useParams<{ pdv: string }>();
@@ -23,9 +19,11 @@ export default function EditorPage() {
   // campos editáveis
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [precoStr, setPrecoStr] = useState('');
+  const [preco, setPreco] = useState(0);
   const [status, setStatus] = useState<'no_ar' | 'pausado'>('no_ar');
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [imagem, setImagem] = useState<string | null>(null); // só quando trocada
+  const [pdvNovo, setPdvNovo] = useState('');
 
   const carregar = useCallback(async () => {
     try {
@@ -33,9 +31,11 @@ export default function EditorPage() {
       setDet(d);
       setNome(d.nome);
       setDescricao(d.descricao);
-      setPrecoStr(brl(d.preco));
+      setPreco(d.preco);
       setStatus(d.status);
       setShifts(d.disponibilidade ?? []);
+      setImagem(null);
+      setPdvNovo(d.pdv);
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -46,11 +46,11 @@ export default function EditorPage() {
     carregar();
   }, [carregar]);
 
-  const preco = parse(precoStr) ?? det?.preco ?? 0;
   const shiftsMudou = !!det && JSON.stringify(shifts) !== JSON.stringify(det.disponibilidade ?? []);
+  const pdvMudou = !!pdvNovo.trim() && pdvNovo.trim() !== pdv;
   const dirty =
     !!det &&
-    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou);
+    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem || pdvMudou);
 
   async function salvar() {
     if (!det || !dirty) return;
@@ -61,11 +61,15 @@ export default function EditorPage() {
     if (Math.abs(preco - det.preco) >= 0.005) campos.preco = preco;
     if (status !== det.status) campos.status = status;
     if (shiftsMudou) campos.shifts = shifts;
+    if (imagem) campos.imagem = imagem;
+    if (pdvMudou) campos.pdv = pdvNovo.trim();
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
         toast('<b style="color:var(--green)">Item publicado</b> no iFood ✓');
-        setTimeout(carregar, 2500);
+        // se o código PDV mudou, o item passa a ser identificado pelo novo código
+        if (r.pdv && r.pdv !== pdv) setTimeout(() => router.replace(`/item/${encodeURIComponent(r.pdv!)}`), 1500);
+        else setTimeout(carregar, 2500);
       } else {
         toast(`Publicado parcialmente. Falhou: ${r.erros.join(', ')}`);
         setTimeout(carregar, 2500);
@@ -118,6 +122,11 @@ export default function EditorPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)', gap: 18, alignItems: 'start' }}>
           <div className="card">
             <div style={{ marginBottom: 16 }}>
+              <label style={label}>Foto</label>
+              <ImageUpload value={imagem ?? undefined} onPick={setImagem} />
+              {!imagem && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Escolha uma foto para atualizar a imagem do item.</div>}
+            </div>
+            <div style={{ marginBottom: 16 }}>
               <label style={label}>Nome</label>
               <input style={box} value={nome} onChange={(e) => setNome(e.target.value)} />
             </div>
@@ -125,15 +134,15 @@ export default function EditorPage() {
               <label style={label}>Descrição</label>
               <textarea style={{ ...box, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
             </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={label}>Código PDV <span style={{ color: pdvMudou ? 'var(--tanger)' : 'var(--dim)' }}>(integração Regem/iFood)</span></label>
+              <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdvNovo} onChange={(e) => setPdvNovo(e.target.value)} placeholder="Ex.: 38520" />
+              {pdvMudou && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem', color: 'var(--tanger)' }}>O item passará a ser identificado por este código ao publicar.</div>}
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={label}>Preço (entrega)</label>
-                <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <span className="mono" style={{ position: 'absolute', left: 13, color: 'var(--dim)', textTransform: 'none' }}>
-                    R$
-                  </span>
-                  <input style={{ ...box, paddingLeft: 34, fontFamily: 'var(--font-mono)' }} value={precoStr} onChange={(e) => setPrecoStr(e.target.value)} onBlur={() => setPrecoStr(brl(preco))} />
-                </span>
+                <MoneyInput valor={preco} onChange={setPreco} ariaLabel="Preço" />
                 {det.promo && (
                   <div className="mono" style={{ color: 'var(--tanger)', fontSize: '.62rem', marginTop: 6, textTransform: 'none' }}>
                     em promoção (de R$ {brl(det.promo.de)}) — o de/por é preservado
@@ -196,7 +205,7 @@ export default function EditorPage() {
               </div>
             ))}
             <div className="sub" style={{ marginTop: 12, fontSize: '.72rem' }}>
-              Complementos e foto: edição avançada em breve.
+              Edição dos complementos: em breve.
             </div>
 
             <div style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 16 }}>

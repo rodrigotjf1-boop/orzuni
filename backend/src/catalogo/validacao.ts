@@ -17,6 +17,7 @@ export interface DadosItem {
   categoriaId?: string;
   categoria?: string;
   pdv?: string;
+  imagem?: string; // data-URI (jpg/png) — enviado ao upload do iFood
   complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
   shifts?: Shift[];
 }

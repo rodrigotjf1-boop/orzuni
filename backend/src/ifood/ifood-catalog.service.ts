@@ -219,7 +219,7 @@ export class IfoodCatalogService {
   async updateProduct(
     merchantId: string,
     productId: string,
-    patch: { name?: string; description?: string },
+    patch: { name?: string; description?: string; imagePath?: string },
     tentativa = 0,
   ): Promise<boolean> {
     const r = await this.req('PUT', `/merchants/${merchantId}/products/${productId}`, patch);

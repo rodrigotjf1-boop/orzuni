@@ -189,8 +189,8 @@ export class CatalogoService {
   async editar(
     merchantId: string,
     pdv: string,
-    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] },
-  ): Promise<{ ok: boolean; erros: string[] }> {
+    campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string },
+  ): Promise<{ ok: boolean; erros: string[]; pdv?: string }> {
     const ref = await this.resolver(merchantId, pdv);
     if (!ref) return { ok: false, erros: ['item não encontrado'] };
     const erros: string[] = [];
@@ -198,10 +198,18 @@ export class CatalogoService {
     if (campos.shifts !== undefined) erros.push(...validarShifts(campos.shifts));
     if (erros.length) return { ok: false, erros };
 
-    if (campos.nome !== undefined || campos.descricao !== undefined) {
+    // foto nova (opcional): sobe e resolve o imagePath antes do PUT /products
+    let imagePath: string | undefined;
+    if (campos.imagem) {
+      imagePath = (await this.ifood.uploadImage(merchantId, campos.imagem)) ?? undefined;
+      if (!imagePath) erros.push('foto');
+    }
+
+    if (campos.nome !== undefined || campos.descricao !== undefined || imagePath) {
       const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
         ...(campos.nome !== undefined ? { name: campos.nome } : {}),
         ...(campos.descricao !== undefined ? { description: campos.descricao } : {}),
+        ...(imagePath ? { imagePath } : {}),
       });
       if (!ok) erros.push('nome/descrição');
     }
@@ -213,8 +221,10 @@ export class CatalogoService {
       const r = await this.status(merchantId, pdv, campos.status);
       if (!r.batchId) erros.push('status');
     }
-    // disponibilidade (shifts): exige re-PUT do item completo (usa o flat como base)
-    if (campos.shifts !== undefined) {
+    // shifts e/ou novo código PDV: exigem re-PUT do item completo (usa o flat como base)
+    const novoPdv = campos.pdv?.trim();
+    const mudouPdv = !!novoPdv && novoPdv !== pdv;
+    if (campos.shifts !== undefined || mudouPdv) {
       const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
       if (flat) {
         // o flat traz campos derivados/read-only (weight com unidade inválida,
@@ -226,17 +236,32 @@ export class CatalogoService {
         // só o produto PRINCIPAL vai em products[]; produtos das opções podem ser
         // industrializados de outro dono (não atualizáveis). As opções apenas os referenciam.
         const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
+        if (mudouPdv) principal.forEach((p) => (p.externalCode = novoPdv)); // relinka o produto ao novo PDV
+        const cm = (flat.item as any).contextModifiers;
         const payload = {
-          item: { ...flat.item, shifts: toIfoodShifts(campos.shifts) ?? [] },
+          item: {
+            ...flat.item,
+            ...(mudouPdv
+              ? {
+                  externalCode: novoPdv,
+                  // os contextModifiers carregam o PDV — atualizar senão o iFood mantém o antigo
+                  ...(Array.isArray(cm) ? { contextModifiers: cm.map((m: any) => ({ ...m, externalCode: novoPdv })) } : {}),
+                }
+              : {}),
+            ...(campos.shifts !== undefined ? { shifts: toIfoodShifts(campos.shifts) ?? [] } : {}),
+          },
           products: principal.length ? principal : (flat.products ?? []).map(limpar),
           optionGroups: flat.optionGroups,
           options: flat.options,
         };
         const r = await this.ifood.putItem(merchantId, payload);
-        if (!(r.status >= 200 && r.status < 300)) erros.push('disponibilidade');
-      } else erros.push('disponibilidade');
+        if (!(r.status >= 200 && r.status < 300)) {
+          const e = mapErroIfood(r.status, r.data);
+          erros.push(mudouPdv ? 'código PDV: ' + e.mensagem : 'disponibilidade');
+        }
+      } else erros.push(campos.shifts !== undefined ? 'disponibilidade' : 'código PDV');
     }
-    return { ok: erros.length === 0, erros };
+    return { ok: erros.length === 0, erros, pdv: mudouPdv ? novoPdv : pdv };
   }
 
   /** Cria uma categoria (POST /categories), validando antes. `template` PIZZA para pizzas. */
@@ -329,12 +354,17 @@ export class CatalogoService {
       });
     }
 
+    // foto (opcional): sobe o data-URI ao iFood e usa o imagePath no produto principal
+    let imagePath: string | undefined;
+    if (d.imagem) imagePath = (await this.ifood.uploadImage(merchantId, d.imagem)) ?? undefined;
+
     // products: o produto principal (com os grupos associados) + um por opção
     const products: any[] = [
       {
         id: productId,
         name: d.nome!.trim(),
         ...(d.descricao ? { description: d.descricao.trim() } : {}),
+        ...(imagePath ? { imagePath } : {}),
         externalCode: ext,
         optionGroups: optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max })),
       },

@@ -5,11 +5,7 @@ import Link from 'next/link';
 import { api, type Shift } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
-
-const parse = (v: string) => {
-  const n = parseFloat(v.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'));
-  return isNaN(n) ? null : n;
-};
+import { MoneyInput } from '@/components/money';
 
 type Tipo = 'ingredientes' | 'especificacao';
 interface Custom {
@@ -17,11 +13,11 @@ interface Custom {
   tipo: Tipo;
   min: number;
   max: number;
-  opcoes: Array<{ nome: string; preco: string }>;
+  opcoes: Array<{ nome: string; preco: number }>;
 }
 interface Opcao {
   nome: string;
-  preco: string;
+  preco: number;
   customizacoes: Custom[];
 }
 interface Grupo {
@@ -35,7 +31,6 @@ interface Grupo {
 const box = { width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.92rem', padding: '11px 13px' } as const;
 const label = { display: 'block', fontFamily: 'var(--font-mono)', fontSize: '.6rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 7 } as const;
 const num = { width: 58, background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--cream)', fontFamily: 'var(--font-mono)', fontSize: '.82rem', padding: '8px', textAlign: 'center' } as const;
-const preco = { width: 96, background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--cream)', fontFamily: 'var(--font-mono)', fontSize: '.82rem', padding: '8px 8px 8px 28px', textAlign: 'right' } as const;
 const MinMax = ({ min, max, onMin, onMax }: { min: number; max: number; onMin: (n: number) => void; onMax: (n: number) => void }) => (
   <>
     <span className="mono" style={{ fontSize: '.55rem', color: 'var(--dim)' }}>mín</span>
@@ -44,11 +39,8 @@ const MinMax = ({ min, max, onMin, onMax }: { min: number; max: number; onMin: (
     <input style={num} type="number" min={0} value={max} onChange={(e) => onMax(+e.target.value)} />
   </>
 );
-const PrecoInput = ({ v, onChange, ph = '0,00' }: { v: string; onChange: (s: string) => void; ph?: string }) => (
-  <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-    <span className="mono" style={{ position: 'absolute', left: 9, color: 'var(--dim)', fontSize: '.7rem', textTransform: 'none' }}>R$</span>
-    <input style={preco} value={v} onChange={(e) => onChange(e.target.value)} placeholder={ph} />
-  </span>
+const PrecoInput = ({ v, onChange }: { v: number; onChange: (n: number) => void }) => (
+  <MoneyInput valor={v} onChange={onChange} style={{ width: 96, fontSize: '.82rem', padding: '8px 8px 8px 28px' }} ariaLabel="Preço" />
 );
 
 export default function NovoComboPage() {
@@ -56,8 +48,9 @@ export default function NovoComboPage() {
   const toast = useToast();
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('Combos');
+  const [pdv, setPdv] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([
-    { nome: '', principal: true, min: 1, max: 1, opcoes: [{ nome: '', preco: '', customizacoes: [] }] },
+    { nome: '', principal: true, min: 1, max: 1, opcoes: [{ nome: '', preco: 0, customizacoes: [] }] },
   ]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [erro, setErro] = useState('');
@@ -65,12 +58,12 @@ export default function NovoComboPage() {
 
   const updGrupo = (gi: number, patch: Partial<Grupo>) => setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, ...patch } : x)));
   const marcarPrincipal = (gi: number) => setGrupos((g) => g.map((x, k) => ({ ...x, principal: k === gi })));
-  const addGrupo = () => setGrupos((g) => [...g, { nome: '', principal: false, min: 1, max: 1, opcoes: [{ nome: '', preco: '', customizacoes: [] }] }]);
+  const addGrupo = () => setGrupos((g) => [...g, { nome: '', principal: false, min: 1, max: 1, opcoes: [{ nome: '', preco: 0, customizacoes: [] }] }]);
   const delGrupo = (gi: number) => setGrupos((g) => g.filter((_, k) => k !== gi));
 
   const updOpcao = (gi: number, oi: number, patch: Partial<Opcao>) =>
     setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, opcoes: x.opcoes.map((o, m) => (m === oi ? { ...o, ...patch } : o)) } : x)));
-  const addOpcao = (gi: number) => setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, opcoes: [...x.opcoes, { nome: '', preco: '', customizacoes: [] }] } : x)));
+  const addOpcao = (gi: number) => setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, opcoes: [...x.opcoes, { nome: '', preco: 0, customizacoes: [] }] } : x)));
   const delOpcao = (gi: number, oi: number) => setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, opcoes: x.opcoes.filter((_, m) => m !== oi) } : x)));
 
   const setCustoms = (gi: number, oi: number, cs: Custom[]) => updOpcao(gi, oi, { customizacoes: cs });
@@ -94,6 +87,7 @@ export default function NovoComboPage() {
       const r = await api.criarCombo({
         nome: nome.trim(),
         categoria: categoria.trim(),
+        pdv: pdv.trim() || undefined,
         grupos: grupos.map((g) => ({
           nome: g.nome.trim(),
           principal: g.principal,
@@ -103,7 +97,7 @@ export default function NovoComboPage() {
             .filter((o) => o.nome.trim())
             .map((o) => ({
               nome: o.nome.trim(),
-              preco: parse(o.preco) ?? 0,
+              preco: o.preco,
               customizacoes: o.customizacoes.length
                 ? o.customizacoes
                     .filter((c) => c.nome.trim())
@@ -112,7 +106,7 @@ export default function NovoComboPage() {
                       tipo: c.tipo,
                       min: c.min,
                       max: c.max,
-                      opcoes: c.opcoes.filter((co) => co.nome.trim()).map((co) => ({ nome: co.nome.trim(), preco: parse(co.preco) ?? 0 })),
+                      opcoes: c.opcoes.filter((co) => co.nome.trim()).map((co) => ({ nome: co.nome.trim(), preco: co.preco })),
                     }))
                 : undefined,
             })),
@@ -159,6 +153,11 @@ export default function NovoComboPage() {
             <label style={label}>Categoria</label>
             <input style={box} value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Combos" />
           </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Ex.: 90210 — vincula ao seu Regem/PDV" />
+          <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Código do seu PDV/Regem para integração. Vazio = gerado automático.</div>
         </div>
       </div>
 
@@ -207,11 +206,11 @@ export default function NovoComboPage() {
 
 /** 3º nível: customizações da opção (ingredientes / especificação). */
 function CustomEditor({ customs, onChange }: { customs: Custom[]; onChange: (c: Custom[]) => void }) {
-  const add = () => onChange([...customs, { nome: '', tipo: 'especificacao', min: 0, max: 1, opcoes: [{ nome: '', preco: '' }] }]);
+  const add = () => onChange([...customs, { nome: '', tipo: 'especificacao', min: 0, max: 1, opcoes: [{ nome: '', preco: 0 }] }]);
   const upd = (ci: number, patch: Partial<Custom>) => onChange(customs.map((c, k) => (k === ci ? { ...c, ...patch } : c)));
   const del = (ci: number) => onChange(customs.filter((_, k) => k !== ci));
-  const addOp = (ci: number) => onChange(customs.map((c, k) => (k === ci ? { ...c, opcoes: [...c.opcoes, { nome: '', preco: '' }] } : c)));
-  const updOp = (ci: number, oi: number, patch: Partial<{ nome: string; preco: string }>) =>
+  const addOp = (ci: number) => onChange(customs.map((c, k) => (k === ci ? { ...c, opcoes: [...c.opcoes, { nome: '', preco: 0 }] } : c)));
+  const updOp = (ci: number, oi: number, patch: Partial<{ nome: string; preco: number }>) =>
     onChange(customs.map((c, k) => (k === ci ? { ...c, opcoes: c.opcoes.map((o, m) => (m === oi ? { ...o, ...patch } : o)) } : c)));
   const delOp = (ci: number, oi: number) => onChange(customs.map((c, k) => (k === ci ? { ...c, opcoes: c.opcoes.filter((_, m) => m !== oi) } : c)));
 

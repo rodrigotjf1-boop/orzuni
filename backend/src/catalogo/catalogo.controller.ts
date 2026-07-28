@@ -82,7 +82,7 @@ export class CatalogoController {
     @Req() req: any,
     @Param('pdv') pdv: string,
     @Query('loja') loja: string | undefined,
-    @Body() body: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[] },
+    @Body() body: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string },
   ) {
     return this.catalogo.editar(await this.merchant(req, loja), pdv, body);
   }
