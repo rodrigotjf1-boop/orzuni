@@ -23,6 +23,7 @@ export default function EditorPage() {
   const [status, setStatus] = useState<'no_ar' | 'pausado'>('no_ar');
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [imagem, setImagem] = useState<string | null>(null); // só quando trocada
+  const [pdvNovo, setPdvNovo] = useState('');
 
   const carregar = useCallback(async () => {
     try {
@@ -34,6 +35,7 @@ export default function EditorPage() {
       setStatus(d.status);
       setShifts(d.disponibilidade ?? []);
       setImagem(null);
+      setPdvNovo(d.pdv);
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
@@ -45,9 +47,10 @@ export default function EditorPage() {
   }, [carregar]);
 
   const shiftsMudou = !!det && JSON.stringify(shifts) !== JSON.stringify(det.disponibilidade ?? []);
+  const pdvMudou = !!pdvNovo.trim() && pdvNovo.trim() !== pdv;
   const dirty =
     !!det &&
-    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem);
+    (nome !== det.nome || descricao !== det.descricao || Math.abs(preco - det.preco) >= 0.005 || status !== det.status || shiftsMudou || !!imagem || pdvMudou);
 
   async function salvar() {
     if (!det || !dirty) return;
@@ -59,11 +62,14 @@ export default function EditorPage() {
     if (status !== det.status) campos.status = status;
     if (shiftsMudou) campos.shifts = shifts;
     if (imagem) campos.imagem = imagem;
+    if (pdvMudou) campos.pdv = pdvNovo.trim();
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
         toast('<b style="color:var(--green)">Item publicado</b> no iFood ✓');
-        setTimeout(carregar, 2500);
+        // se o código PDV mudou, o item passa a ser identificado pelo novo código
+        if (r.pdv && r.pdv !== pdv) setTimeout(() => router.replace(`/item/${encodeURIComponent(r.pdv!)}`), 1500);
+        else setTimeout(carregar, 2500);
       } else {
         toast(`Publicado parcialmente. Falhou: ${r.erros.join(', ')}`);
         setTimeout(carregar, 2500);
@@ -127,6 +133,11 @@ export default function EditorPage() {
             <div style={{ marginBottom: 16 }}>
               <label style={label}>Descrição</label>
               <textarea style={{ ...box, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={label}>Código PDV <span style={{ color: pdvMudou ? 'var(--tanger)' : 'var(--dim)' }}>(integração Regem/iFood)</span></label>
+              <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdvNovo} onChange={(e) => setPdvNovo(e.target.value)} placeholder="Ex.: 38520" />
+              {pdvMudou && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem', color: 'var(--tanger)' }}>O item passará a ser identificado por este código ao publicar.</div>}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>

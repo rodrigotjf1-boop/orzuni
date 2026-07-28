@@ -105,6 +105,7 @@ export default function NovaPizzaPage() {
   const toast = useToast();
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('Pizzas');
+  const [pdv, setPdv] = useState('');
   const [tamanhos, setTamanhos] = useState<Linha[]>([{ nome: 'Grande', preco: 0, pedacos: '8', maxSabores: 2 }]);
   const [massas, setMassas] = useState<Linha[]>([{ nome: 'Tradicional', preco: 0 }]);
   const [bordas, setBordas] = useState<Linha[]>([{ nome: 'Tradicional', preco: 0 }]);
@@ -135,6 +136,7 @@ export default function NovaPizzaPage() {
       const r = await api.criarPizza({
         nome: nome.trim(),
         categoria: categoria.trim(),
+        pdv: pdv.trim() || undefined,
         tamanhos: limpa(tamanhos).map((t) => ({ nome: t.nome.trim(), preco: t.preco, pedacos: t.pedacos ? parseInt(t.pedacos, 10) : undefined, maxSabores: t.maxSabores ?? 1 })),
         massas: limpa(massas).map((m) => ({ nome: m.nome.trim(), preco: m.preco })),
         bordas: limpa(bordas).map((b) => ({ nome: b.nome.trim(), preco: b.preco })),
@@ -182,7 +184,11 @@ export default function NovaPizzaPage() {
             <input style={box} value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Pizzas" />
           </div>
         </div>
-        <div className="sub" style={{ marginTop: 10, color: 'var(--dim)' }}>A categoria será criada como categoria de <b>pizza</b> (o iFood aceita uma por loja).</div>
+        <div style={{ marginTop: 14 }}>
+          <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Ex.: 38520 — vincula ao seu Regem/PDV" />
+        </div>
+        <div className="sub" style={{ marginTop: 10, color: 'var(--dim)' }}>A categoria será criada como categoria de <b>pizza</b> (o iFood aceita uma por loja). Código PDV vazio = gerado automático.</div>
       </div>
 
       <Grupo titulo="Tamanhos" ajuda="O preço-base da pizza. 'Máx. sabores' habilita meio a meio." linhas={tamanhos} onChange={setTamanhos} comTamanho />
