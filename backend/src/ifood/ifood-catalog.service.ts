@@ -90,8 +90,10 @@ export class IfoodCatalogService {
     const data = (text ? JSON.parse(text) : null) as T;
     if (!res.ok && res.status !== 202) {
       this.logger.warn(`${method} ${path} → ${res.status}: ${text.slice(0, 160)}`);
-      // "concurrently modified" é transitório (o putItem/updateProduct retenta) → não polui a telemetria
-      if (!/concurrently modified/i.test(text)) {
+      // não polui a telemetria com ruído: "concurrently modified" (transitório, com retry)
+      // e GET 4xx (leituras/poller do vigia). Guarda mutações e 5xx (erros reais).
+      const ruido = /concurrently modified/i.test(text) || (method === 'GET' && res.status < 500);
+      if (!ruido) {
         this.tel.registrarIfood(`${method} ${this.rota(path)}`, res.status, data, this.merchantDe(path));
       }
     }
