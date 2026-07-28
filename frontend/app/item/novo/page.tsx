@@ -22,6 +22,7 @@ export default function NovoItemPage() {
   const [descricao, setDescricao] = useState('');
   const [preco, setPreco] = useState(0);
   const [categoria, setCategoria] = useState('');
+  const [pdv, setPdv] = useState('');
   const [imagem, setImagem] = useState<string | null>(null);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -78,6 +79,7 @@ export default function NovoItemPage() {
         descricao: descricao.trim() || undefined,
         preco,
         categoria: categoria.trim(),
+        pdv: pdv.trim() || undefined,
         imagem: imagem || undefined,
         complementos: grupos.length
           ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco })) }))
@@ -141,6 +143,11 @@ export default function NovoItemPage() {
             <input style={box} value={categoria} onChange={(e) => setCategoria(e.target.value)} list="cats" placeholder="Escolha ou digite uma nova" />
             <datalist id="cats">{cats.map((c) => <option key={c} value={c} />)}</datalist>
           </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Ex.: 38520 — vincula ao seu Regem/PDV" />
+          <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Código do seu PDV/Regem para integração. Vazio = o Orzuni gera um automático.</div>
         </div>
       </div>
 

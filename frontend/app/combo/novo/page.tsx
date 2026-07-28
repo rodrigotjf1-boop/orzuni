@@ -48,6 +48,7 @@ export default function NovoComboPage() {
   const toast = useToast();
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState('Combos');
+  const [pdv, setPdv] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([
     { nome: '', principal: true, min: 1, max: 1, opcoes: [{ nome: '', preco: 0, customizacoes: [] }] },
   ]);
@@ -86,6 +87,7 @@ export default function NovoComboPage() {
       const r = await api.criarCombo({
         nome: nome.trim(),
         categoria: categoria.trim(),
+        pdv: pdv.trim() || undefined,
         grupos: grupos.map((g) => ({
           nome: g.nome.trim(),
           principal: g.principal,
@@ -151,6 +153,11 @@ export default function NovoComboPage() {
             <label style={label}>Categoria</label>
             <input style={box} value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Combos" />
           </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Ex.: 90210 — vincula ao seu Regem/PDV" />
+          <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Código do seu PDV/Regem para integração. Vazio = gerado automático.</div>
         </div>
       </div>
 
