@@ -2,12 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
-
-const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const parse = (v: string) => {
-  const n = parseFloat(v.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'));
-  return isNaN(n) ? null : n;
-};
+import { MoneyInput, brl } from '@/components/money';
 
 export default function PrecosPage() {
   const [itens, setItens] = useState<ItemCardapio[] | null>(null);
@@ -42,9 +37,8 @@ export default function PrecosPage() {
     [draft, itens],
   );
 
-  function set(pdv: string, valor: string) {
-    const n = parse(valor);
-    setDraft((d) => ({ ...d, [pdv]: n ?? 0 }));
+  function set(pdv: string, valor: number) {
+    setDraft((d) => ({ ...d, [pdv]: valor }));
   }
 
   async function publicar() {
@@ -136,25 +130,17 @@ export default function PrecosPage() {
                       R$ {brl(it.preco)}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
-                      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                        <span className="mono" style={{ position: 'absolute', left: 11, color: 'var(--dim)', textTransform: 'none' }}>
-                          R$
-                        </span>
-                        <input
+                      <span style={{ display: 'inline-flex', justifyContent: 'flex-end' }}>
+                        <MoneyInput
+                          valor={novo}
+                          onChange={(n) => set(pdv, n)}
                           disabled={!it.pdv}
-                          defaultValue={brl(it.preco)}
-                          onChange={(e) => set(pdv, e.target.value)}
-                          className="mono"
+                          ariaLabel={`Novo preço de ${it.nome}`}
                           style={{
                             width: 118,
-                            background: 'var(--ink)',
                             border: `1px solid ${dirty ? 'var(--tanger)' : 'var(--line)'}`,
-                            borderRadius: 10,
                             color: dirty ? 'var(--tanger)' : 'var(--cream)',
-                            fontSize: '.9rem',
                             padding: '9px 11px 9px 30px',
-                            textAlign: 'right',
-                            textTransform: 'none',
                           }}
                         />
                       </span>
