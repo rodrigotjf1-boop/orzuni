@@ -67,21 +67,33 @@ Matriz: cada (sabor × tamanho) vira uma option amarrada ao tamanho. Ex.: Marghe
 }
 ```
 
-### ⚠️ BLOQUEIO ao vivo (2026-07-27, loja Teste C 77e41b59)
-Toda tentativa de `PUT /items` de PIZZA nessa loja é recusada com **400
-`Pizza topping option <id> must be linked with all sizes in all contexts`** — inclusive:
-- sabor **plano** (o exato do exemplo da doc, só que com UUIDs) → recusa;
-- **uma opção por (sabor×tamanho)** com `parentCustomizationOptionId` → recusa (o validador
-  cobra CADA opção como "linked with all sizes", o que um único parent não satisfaz);
-- opção-base + por-tamanho, e parent = id do produto do tamanho → recusam igual;
-- com e sem `categoryId`, com `externalCode` nas opções → mesma recusa.
+### ✅ RESOLVIDO (2026-07-27) — o que o "must be linked with all sizes" exigia
+O erro `Pizza topping option ... must be linked with all sizes in all contexts` foi
+decifrado pelo **schema OpenAPI** (`/pt-BR/docs/references#catalog`, `OptionDto`). A regra:
 
-Ou seja: **o exemplo de criação da doc não passa nessa loja**. A estrutura que o validador
-aceita para amarrar 1 sabor a TODOS os tamanhos numa única opção não está documentada no guia
-de criação (a doc só mostra `parentCustomizationOptionId` no fluxo de UPDATE `PATCH /options/price`).
-requestIds para suporte: 86f86f59, 96a96fce, ed228605, 8f8289c1, 7af9d350.
-**Combo está OK** (COMBO_V2 provado ao vivo). Pizza pendente: precisa do `/flat` de uma pizza
-real OU de resposta do suporte iFood sobre o shape exato do TOPPING na criação.
+1. **O vínculo sabor↔tamanho NÃO é um `parentCustomizationOptionId` no topo da opção** (isso
+   era só do exemplo simplificado do guia). É dentro de **`contextModifiers`**, campo
+   **`parentOptionId`**. Cada sabor é **UMA** opção com **um `contextModifier` por (tamanho ×
+   contexto)**:
+   ```json
+   { "id": "opt-sabor", "productId": "prod-sabor", "status": "AVAILABLE",
+     "price": {"value": 0}, "fractions": [1], "externalCode": "...",
+     "contextModifiers": [
+       { "status": "AVAILABLE", "price": {"value": 0}, "catalogContext": "DEFAULT", "parentOptionId": "<opt-tamanho-1>" },
+       { "status": "AVAILABLE", "price": {"value": 0}, "catalogContext": "DEFAULT", "parentOptionId": "<opt-tamanho-2>" }
+     ] }
+   ```
+2. **`fractions` é obrigatório em TODA opção e é NÚMERO 1..4** (não string). Tamanho = `[1..maxSabores]`;
+   massa/borda/sabor = `[1]`.
+3. **NUNCA enviar `categoryId` numa pizza** — a API gerencia a categoria PIZZA sozinha. Passar
+   `categoryId` (mesmo o de uma categoria PIZZA existente) dá **409 "Cannot have two categories
+   with same id"**. Omitindo, o iFood cria uma categoria PIZZA nomeada com o nome do item
+   (comportamento da API; não há como forçar uma única "Pizzas" nessa versão).
+4. `serving` a API preenche sozinha (`NOT_APPLICABLE`).
+
+**Provado ao vivo** na Teste C: `POST /v1/pizzas` cria a pizza com os 4 grupos, reflete no
+cardápio (nome/ status corretos). Quirks menores de exibição: preço do item aparece 0 (o preço
+está nos tamanhos) e a categoria fica com o nome da pizza. Builder em `criarPizza`.
 
 ### Endpoints de opção (novos, além dos já usados)
 - **`PATCH /merchants/{m}/options/price`** — corpo `{ optionId, parentCustomizationOptionId?, price:{value}, priceByCatalog?:[{value, catalogContext}] }`.

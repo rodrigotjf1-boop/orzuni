@@ -87,6 +87,43 @@ export function validarItem(d: DadosItem): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Pizza (type PIZZA) — 4 grupos obrigatórios SIZE/CRUST/EDGE/TOPPING.
+// Preço-base no tamanho; fractions = quantos sabores o tamanho aceita.
+// ---------------------------------------------------------------------------
+export interface DadosPizza {
+  nome?: string;
+  categoria?: string;
+  categoriaId?: string;
+  pdv?: string;
+  tamanhos?: Array<{ nome: string; preco: number; pedacos?: number; maxSabores?: number }>;
+  massas?: Array<{ nome: string; preco?: number }>;
+  bordas?: Array<{ nome: string; preco?: number }>;
+  sabores?: Array<{ nome: string; preco?: number }>;
+  shifts?: Shift[];
+}
+
+export function validarPizza(d: DadosPizza): string[] {
+  const e: string[] = [];
+  if (!d.nome || !d.nome.trim()) e.push('nome é obrigatório');
+  else if (d.nome.length > 100) e.push('nome deve ter até 100 caracteres');
+  if (!d.categoriaId && !d.categoria) e.push('categoria é obrigatória');
+
+  if (!d.tamanhos?.length) e.push('a pizza precisa de ao menos um tamanho (SIZE)');
+  for (const t of d.tamanhos ?? []) {
+    if (!t.nome?.trim()) e.push('tamanho sem nome');
+    if (typeof t.preco !== 'number' || isNaN(t.preco) || t.preco <= 0) e.push(`tamanho "${t.nome}": preço deve ser positivo`);
+    if (t.maxSabores != null && (!Number.isInteger(t.maxSabores) || t.maxSabores < 1)) e.push(`tamanho "${t.nome}": máx. de sabores inválido`);
+  }
+  if (!d.massas?.length) e.push('a pizza precisa de ao menos uma massa (CRUST)');
+  for (const m of d.massas ?? []) if (!m.nome?.trim()) e.push('massa sem nome');
+  if (!d.sabores?.length) e.push('a pizza precisa de ao menos um sabor (TOPPING)');
+  for (const s of d.sabores ?? []) if (!s.nome?.trim()) e.push('sabor sem nome');
+  // bordas é grupo obrigatório na estrutura, mas o builder cria um padrão se vier vazio
+  for (const b of d.bordas ?? []) if (!b.nome?.trim()) e.push('borda sem nome');
+  return e;
+}
+
+// ---------------------------------------------------------------------------
 // Combo (type COMBO_V2) — exatamente 1 grupo principal (MAIN); grupos de nível 2
 // são OFFER_UNIT; customizações de 3º nível são INGREDIENTS/SPECIFICATION.
 // ---------------------------------------------------------------------------
