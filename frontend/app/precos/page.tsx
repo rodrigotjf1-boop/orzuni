@@ -66,15 +66,16 @@ export default function PrecosPage() {
           <div className="sub">Edite os preços do seu cardápio iFood em rascunho e publique de uma vez. A promoção “de/por” é preservada.</div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          {contextos.length > 1 && (
-            <select value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal" style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.85rem', padding: '11px 13px', cursor: 'pointer' }}>
+          <label className="mono" style={{ fontSize: '.58rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            canal
+            <select value={canal} onChange={(e) => setCanal(e.target.value)} aria-label="Canal" style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.85rem', padding: '11px 13px', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
               {contextos.map((c) => (
                 <option key={c} value={c}>
                   {CANAL_NOME[c] ?? c}
                 </option>
               ))}
             </select>
-          )}
+          </label>
           <button className="btn" disabled={!pendentes.length || enviando} onClick={publicar}>
             {enviando ? 'Publicando…' : pendentes.length ? `Publicar ${pendentes.length} preço${pendentes.length > 1 ? 's' : ''}` : 'Publicar'}
           </button>
