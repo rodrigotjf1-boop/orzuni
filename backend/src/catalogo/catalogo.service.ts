@@ -160,7 +160,9 @@ export class CatalogoService {
       obrigatorio: (g.min ?? 0) > 0,
       opcoes: (g.optionIds ?? []).map((oid) => {
         const o = flat?.options?.find((x) => x.id === oid);
-        return { nome: o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado' };
+        // o nome legível está no PRODUTO da opção; externalCode/id são só fallback
+        const prod = flat?.products?.find((p) => p.id === o?.productId);
+        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado' };
       }),
     }));
     return {
