@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IfoodAuthService } from './ifood-auth.service';
+import { TelemetriaService } from '../telemetria/telemetria.service';
 import type {
   IfoodCatalog,
   IfoodCategory,
@@ -32,7 +33,15 @@ export class IfoodCatalogService {
   private readonly base =
     (process.env.IFOOD_BASE ?? 'https://merchant-api.ifood.com.br') + '/catalog/v2.0';
 
-  constructor(private readonly auth: IfoodAuthService) {}
+  constructor(
+    private readonly auth: IfoodAuthService,
+    private readonly tel: TelemetriaService,
+  ) {}
+
+  // merchant id da URL (para a telemetria), quando presente
+  private merchantDe(path: string): string | undefined {
+    return path.match(/merchants\/([0-9a-f-]{36})/i)?.[1];
+  }
 
   // ---- transporte ----
   private async req<T>(
@@ -67,6 +76,7 @@ export class IfoodCatalogService {
         return this.req<T>(method, path, body, tentativa + 1);
       }
       this.logger.warn(`${method} ${path} → ${timeout ? 'timeout(30s)' : 'rede'}: ${e?.message ?? e}`);
+      this.tel.registrar({ nivel: 'error', origem: 'ifood', acao: `${method} ${this.rota(path)}`, status: timeout ? 504 : 503, mensagem: timeout ? 'tempo esgotado (30s)' : `falha de rede: ${e?.message ?? e}`, merchant: this.merchantDe(path) });
       return { status: timeout ? 504 : 503, data: { error: { message: timeout ? 'tempo esgotado' : 'rede' } } as any };
     }
     clearTimeout(timer);
@@ -80,8 +90,17 @@ export class IfoodCatalogService {
     const data = (text ? JSON.parse(text) : null) as T;
     if (!res.ok && res.status !== 202) {
       this.logger.warn(`${method} ${path} → ${res.status}: ${text.slice(0, 160)}`);
+      // "concurrently modified" é transitório (o putItem/updateProduct retenta) → não polui a telemetria
+      if (!/concurrently modified/i.test(text)) {
+        this.tel.registrarIfood(`${method} ${this.rota(path)}`, res.status, data, this.merchantDe(path));
+      }
     }
     return { status: res.status, data };
+  }
+
+  // encurta a rota p/ telemetria (remove o id do merchant, deixa o endpoint)
+  private rota(path: string): string {
+    return path.replace(/\/merchants\/[0-9a-f-]{36}/i, '').split('?')[0] || path;
   }
 
   // ---- leitura ----
