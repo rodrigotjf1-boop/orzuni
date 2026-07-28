@@ -188,16 +188,16 @@ export class IfoodCatalogService {
     return status === 200 ? data : null;
   }
 
-  /** Cria uma categoria. Retorna {status, data, id}. */
+  /** Cria uma categoria. `template` = DEFAULT (padrão) ou PIZZA. Retorna {status, data, id}. */
   async createCategory(
     merchantId: string,
     catalogId: string,
-    body: { name: string; externalCode: string },
+    body: { name: string; externalCode: string; template?: 'DEFAULT' | 'PIZZA' },
   ): Promise<{ status: number; data: any; id?: string }> {
     const r = await this.req<any>('POST', `/merchants/${merchantId}/catalogs/${catalogId}/categories`, {
       name: body.name,
       status: 'AVAILABLE',
-      template: 'DEFAULT',
+      template: body.template ?? 'DEFAULT',
       externalCode: body.externalCode,
       index: 99,
     });

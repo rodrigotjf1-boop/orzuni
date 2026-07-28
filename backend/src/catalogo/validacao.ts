@@ -86,6 +86,62 @@ export function validarItem(d: DadosItem): string[] {
   return e;
 }
 
+// ---------------------------------------------------------------------------
+// Combo (type COMBO_V2) — exatamente 1 grupo principal (MAIN); grupos de nível 2
+// são OFFER_UNIT; customizações de 3º nível são INGREDIENTS/SPECIFICATION.
+// ---------------------------------------------------------------------------
+export interface CustomizacaoCombo {
+  nome: string;
+  tipo: 'ingredientes' | 'especificacao';
+  min: number;
+  max: number;
+  opcoes: Array<{ nome: string; preco?: number }>;
+}
+export interface GrupoCombo {
+  nome: string;
+  principal?: boolean;
+  min: number;
+  max: number;
+  opcoes: Array<{ nome: string; preco: number; customizacoes?: CustomizacaoCombo[] }>;
+}
+export interface DadosCombo {
+  nome?: string;
+  categoria?: string;
+  categoriaId?: string;
+  pdv?: string;
+  grupos?: GrupoCombo[];
+  shifts?: Shift[];
+}
+
+export function validarCombo(d: DadosCombo): string[] {
+  const e: string[] = [];
+  if (!d.nome || !d.nome.trim()) e.push('nome é obrigatório');
+  else if (d.nome.length > 100) e.push('nome deve ter até 100 caracteres');
+  if (!d.categoriaId && !d.categoria) e.push('categoria é obrigatória');
+
+  if (!d.grupos?.length) e.push('o combo precisa de ao menos um grupo');
+  const principais = (d.grupos ?? []).filter((g) => g.principal).length;
+  if ((d.grupos?.length ?? 0) > 0 && principais !== 1) e.push('o combo precisa de exatamente um grupo principal');
+
+  for (const g of d.grupos ?? []) {
+    if (!g.nome?.trim()) e.push('grupo sem nome');
+    if (g.min < 0 || g.max < g.min || g.max < 1) e.push(`grupo "${g.nome}": min/max inválidos`);
+    if (!g.opcoes?.length) e.push(`grupo "${g.nome}" precisa de ao menos uma opção`);
+    for (const o of g.opcoes ?? []) {
+      if (!o.nome?.trim()) e.push(`grupo "${g.nome}": opção sem nome`);
+      if (typeof o.preco !== 'number' || isNaN(o.preco) || o.preco < 0) e.push(`opção "${o.nome}": preço inválido`);
+      for (const c of o.customizacoes ?? []) {
+        if (!c.nome?.trim()) e.push(`opção "${o.nome}": customização sem nome`);
+        if (c.tipo !== 'ingredientes' && c.tipo !== 'especificacao') e.push(`customização "${c.nome}": tipo inválido`);
+        if (c.min < 0 || c.max < c.min || c.max < 1) e.push(`customização "${c.nome}": min/max inválidos`);
+        if (!c.opcoes?.length) e.push(`customização "${c.nome}" precisa de ao menos uma opção`);
+        for (const co of c.opcoes ?? []) if (!co.nome?.trim()) e.push(`customização "${c.nome}": opção sem nome`);
+      }
+    }
+  }
+  return e;
+}
+
 export function validarCategoria(nome: string): string[] {
   const e: string[] = [];
   if (!nome || !nome.trim()) e.push('nome da categoria é obrigatório');

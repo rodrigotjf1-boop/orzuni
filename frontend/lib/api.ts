@@ -101,6 +101,23 @@ export const api = {
     complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
     shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
+  criarCombo: (dados: {
+    nome: string;
+    categoria: string;
+    pdv?: string;
+    grupos: Array<{
+      nome: string;
+      principal?: boolean;
+      min: number;
+      max: number;
+      opcoes: Array<{
+        nome: string;
+        preco: number;
+        customizacoes?: Array<{ nome: string; tipo: 'ingredientes' | 'especificacao'; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+      }>;
+    }>;
+    shifts?: Shift[];
+  }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/combos', { method: 'POST', body: JSON.stringify(dados) }),
   contextos: () => req<{ contextos: string[] }>('v1/contextos'),
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {

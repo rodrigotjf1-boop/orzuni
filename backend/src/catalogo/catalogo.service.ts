@@ -2,7 +2,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { IfoodCatalogService } from '../ifood/ifood-catalog.service';
 import type { IfoodItem } from '../ifood/ifood.types';
-import { validarItem, validarCategoria, validarShifts, toIfoodShifts, fromIfoodShifts, mapErroIfood, type DadosItem, type Shift } from './validacao';
+import {
+  validarItem,
+  validarCategoria,
+  validarShifts,
+  validarCombo,
+  toIfoodShifts,
+  fromIfoodShifts,
+  mapErroIfood,
+  type DadosItem,
+  type DadosCombo,
+  type Shift,
+} from './validacao';
 
 export interface ItemDetalhe {
   pdv: string;
@@ -226,8 +237,12 @@ export class CatalogoService {
     return { ok: erros.length === 0, erros };
   }
 
-  /** Cria uma categoria (POST /categories), validando antes. */
-  async criarCategoria(merchantId: string, nome: string): Promise<{ ok: boolean; categoryId?: string; erro?: string }> {
+  /** Cria uma categoria (POST /categories), validando antes. `template` PIZZA para pizzas. */
+  async criarCategoria(
+    merchantId: string,
+    nome: string,
+    template: 'DEFAULT' | 'PIZZA' = 'DEFAULT',
+  ): Promise<{ ok: boolean; categoryId?: string; erro?: string }> {
     const erros = validarCategoria(nome);
     if (erros.length) return { ok: false, erro: erros.join('; ') };
     const [cat] = await this.ifood.catalogs(merchantId);
@@ -235,10 +250,35 @@ export class CatalogoService {
     const r = await this.ifood.createCategory(merchantId, cat.catalogId, {
       name: nome.trim(),
       externalCode: 'ORZ-CAT-' + Date.now(),
+      template,
     });
     if (r.status === 201) return { ok: true, categoryId: r.id };
     const e = mapErroIfood(r.status, r.data);
     return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Resolve o id da categoria a partir de {categoriaId | categoria(nome)}; cria se
+   * não existir (com o `template` informado). Para pizza, procura/cria a categoria PIZZA.
+   */
+  private async resolverCategoriaId(
+    merchantId: string,
+    catalogId: string,
+    ref: { categoriaId?: string; categoria?: string },
+    template: 'DEFAULT' | 'PIZZA' = 'DEFAULT',
+  ): Promise<{ ok: true; categoryId: string } | { ok: false; erro: string }> {
+    if (ref.categoriaId) return { ok: true, categoryId: ref.categoriaId };
+    const cats = await this.ifood.categories(merchantId, catalogId);
+    // pizza: reaproveita QUALQUER categoria PIZZA existente (a loja só aceita uma)
+    if (template === 'PIZZA') {
+      const jaPizza = cats.find((c) => c.template === 'PIZZA');
+      if (jaPizza) return { ok: true, categoryId: jaPizza.id };
+    }
+    const achada = cats.find((c) => c.name?.toLowerCase() === ref.categoria?.toLowerCase());
+    if (achada) return { ok: true, categoryId: achada.id };
+    const nova = await this.criarCategoria(merchantId, ref.categoria!, template);
+    if (!nova.ok || !nova.categoryId) return { ok: false, erro: 'não consegui criar a categoria: ' + nova.erro };
+    return { ok: true, categoryId: nova.categoryId };
   }
 
   /**
@@ -253,17 +293,9 @@ export class CatalogoService {
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
 
     // resolve/cria a categoria
-    let categoryId = d.categoriaId;
-    if (!categoryId) {
-      const cats = await this.ifood.categories(merchantId, cat.catalogId);
-      const achada = cats.find((c) => c.name?.toLowerCase() === d.categoria!.toLowerCase());
-      if (achada) categoryId = achada.id;
-      else {
-        const nova = await this.criarCategoria(merchantId, d.categoria!);
-        if (!nova.ok) return { ok: false, erro: 'não consegui criar a categoria: ' + nova.erro };
-        categoryId = nova.categoryId;
-      }
-    }
+    const rc = await this.resolverCategoriaId(merchantId, cat.catalogId, d);
+    if (!rc.ok) return { ok: false, erro: rc.erro };
+    const categoryId = rc.categoryId;
 
     const itemId = randomUUID();
     const productId = randomUUID();
@@ -329,6 +361,95 @@ export class CatalogoService {
     if (r.status >= 200 && r.status < 300) return { ok: true, pdv: ext };
     const e = mapErroIfood(r.status, r.data);
     this.logger.warn(`criarItem ${e.codigo}: ${e.mensagem}`);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Cria um COMBO (type COMBO_V2): um grupo principal (MAIN) + grupos adicionais
+   * (OFFER_UNIT) + customizações de 3º nível (INGREDIENTS/SPECIFICATION) presas ao
+   * produto da opção. Todo produto referenciado entra em products[]. Ver docs/pizza-combo-shape.md.
+   */
+  async criarCombo(merchantId: string, d: DadosCombo): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
+    const erros = [...validarCombo(d), ...validarShifts(d.shifts)];
+    if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
+
+    const rc = await this.resolverCategoriaId(merchantId, cat.catalogId, d);
+    if (!rc.ok) return { ok: false, erro: rc.erro };
+    const categoryId = rc.categoryId;
+
+    const itemId = randomUUID();
+    const productId = randomUUID();
+    const ext = d.pdv?.trim() || 'ORZ-CMB-' + Date.now();
+
+    const products: any[] = [];
+    const optionGroups: any[] = [];
+    const options: any[] = [];
+    const TIPO_3N = { ingredientes: 'INGREDIENTS', especificacao: 'SPECIFICATION' } as const;
+
+    // grupos de nível 2 (OFFER_UNIT) — referenciados pelo produto principal
+    const gruposPrincipais: any[] = [];
+    (d.grupos ?? []).forEach((g, gi) => {
+      const groupId = randomUUID();
+      const optionIds: string[] = [];
+      g.opcoes.forEach((o, oi) => {
+        const optId = randomUUID();
+        const prodId = randomUUID();
+        optionIds.push(optId);
+        options.push({ id: optId, productId: prodId, status: 'AVAILABLE', index: oi, price: { value: o.preco } });
+
+        // 3º nível: customizações presas ao PRODUTO da opção
+        const gruposCustom: any[] = [];
+        (o.customizacoes ?? []).forEach((c, ci) => {
+          const cgId = randomUUID();
+          const cOptIds: string[] = [];
+          c.opcoes.forEach((co) => {
+            const coId = randomUUID();
+            const coProdId = randomUUID();
+            cOptIds.push(coId);
+            options.push({ id: coId, productId: coProdId, status: 'AVAILABLE', price: { value: co.preco ?? 0 } });
+            products.push({ id: coProdId, name: co.nome.trim(), externalCode: 'ORZ-CP-' + coProdId.slice(0, 8) });
+          });
+          optionGroups.push({ id: cgId, name: c.nome.trim(), status: 'AVAILABLE', optionGroupType: TIPO_3N[c.tipo], optionIds: cOptIds });
+          gruposCustom.push({ id: cgId, min: c.min, max: c.max, index: ci });
+        });
+
+        products.push({
+          id: prodId,
+          name: o.nome.trim(),
+          externalCode: 'ORZ-CO-' + prodId.slice(0, 8),
+          ...(gruposCustom.length ? { optionGroups: gruposCustom } : {}),
+        });
+      });
+      optionGroups.push({ id: groupId, name: g.nome.trim(), status: 'AVAILABLE', optionGroupType: 'OFFER_UNIT', optionIds });
+      gruposPrincipais.push({ id: groupId, min: g.min, max: g.max, index: gi, ...(g.principal ? { associationType: 'MAIN' } : {}) });
+    });
+
+    // produto principal do combo referencia os grupos de nível 2
+    products.unshift({ id: productId, name: d.nome!.trim(), externalCode: ext, optionGroups: gruposPrincipais });
+
+    const shifts = toIfoodShifts(d.shifts);
+    const payload = {
+      item: {
+        id: itemId,
+        type: 'COMBO_V2',
+        categoryId,
+        productId,
+        status: 'AVAILABLE',
+        externalCode: ext,
+        index: 1,
+        ...(shifts ? { shifts } : {}),
+      },
+      products,
+      optionGroups,
+      options,
+    };
+
+    const r = await this.ifood.putItem(merchantId, payload);
+    if (r.status >= 200 && r.status < 300) return { ok: true, pdv: ext };
+    const e = mapErroIfood(r.status, r.data);
+    this.logger.warn(`criarCombo ${e.codigo}: ${e.mensagem}`);
     return { ok: false, erro: e.mensagem };
   }
 
