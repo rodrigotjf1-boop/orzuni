@@ -25,6 +25,7 @@ export interface ItemDetalhe {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
+  imagem: string; // URL da foto atual (imagePath do iFood), '' se não tiver
   complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
   disponibilidade: Shift[];
 }
@@ -37,6 +38,7 @@ export interface ItemCanonico {
   preco: number;
   promo: { de: number } | null; // "de/por" (originalValue)
   status: 'no_ar' | 'pausado';
+  imagem: string | null; // URL da foto (thumbnail), se houver
 }
 
 /**
@@ -66,6 +68,7 @@ export class CatalogoService {
           preco: preco?.value ?? 0,
           promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
           status: this.noAr(it) ? 'no_ar' : 'pausado',
+          imagem: (it as any).imagePath ?? null,
         });
       }
     }
@@ -177,6 +180,7 @@ export class CatalogoService {
       preco: preco?.value ?? 0,
       promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
       status: this.noAr(ref.item) ? 'no_ar' : 'pausado',
+      imagem: (produto as any)?.imagePath ?? '',
       complementos,
       disponibilidade: fromIfoodShifts((flat?.item as any)?.shifts ?? (ref.item as any).shifts),
     };

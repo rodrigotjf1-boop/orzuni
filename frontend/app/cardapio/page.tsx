@@ -11,7 +11,31 @@ export default function CardapioPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [modalCat, setModalCat] = useState(false);
+  const [novaCat, setNovaCat] = useState('');
+  const [criandoCat, setCriandoCat] = useState(false);
   const toast = useToast();
+
+  async function criarCategoria() {
+    const nome = novaCat.trim();
+    if (!nome) return;
+    setCriandoCat(true);
+    try {
+      const r = await api.criarCategoria(nome);
+      if (r.ok) {
+        toast(`<b style="color:var(--green)">Categoria "${nome}"</b> criada ✓`);
+        setModalCat(false);
+        setNovaCat('');
+        carregar();
+      } else {
+        toast(`Erro: ${r.erro || 'não foi possível criar'}`);
+      }
+    } catch (e: any) {
+      toast(`Erro: ${e.message}`);
+    } finally {
+      setCriandoCat(false);
+    }
+  }
 
   const carregar = useCallback(async () => {
     try {
@@ -97,8 +121,38 @@ export default function CardapioPage() {
           <Link href="/combo/novo" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
             + Combo
           </Link>
+          <button className="btn ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setModalCat(true)}>
+            + Categoria
+          </button>
         </div>
       </div>
+
+      {modalCat && (
+        <div
+          onClick={() => !criandoCat && setModalCat(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 100%)' }}>
+            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Nova categoria</h2>
+            <div className="sub" style={{ marginBottom: 14 }}>Cria uma categoria no seu cardápio do iFood (POST /categories).</div>
+            <input
+              autoFocus
+              value={novaCat}
+              onChange={(e) => setNovaCat(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && criarCategoria()}
+              maxLength={100}
+              placeholder="Ex.: Bebidas, Sobremesas…"
+              style={{ width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.95rem', padding: '12px 14px' }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn ghost mini" disabled={criandoCat} onClick={() => setModalCat(false)}>Cancelar</button>
+              <button className="btn" disabled={criandoCat || !novaCat.trim()} onClick={criarCategoria}>
+                {criandoCat ? 'Criando…' : 'Criar categoria'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* barra de ação em massa */}
       {sel.size > 0 && (
@@ -126,6 +180,14 @@ export default function CardapioPage() {
                   {it.pdv && (
                     <input type="checkbox" checked={sel.has(it.pdv)} onChange={() => toggleSel(it.pdv!)} aria-label={`Selecionar ${it.nome}`} style={{ width: 16, height: 16, accentColor: 'var(--tanger)', cursor: 'pointer', flex: 'none' }} />
                   )}
+                  <div style={{ width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flex: 'none', background: 'var(--ink)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {it.imagem ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.imagem} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span className="mono" style={{ fontSize: '.5rem', color: 'var(--dim)' }}>—</span>
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 150 }}>
                     {it.pdv ? (
                       <Link href={`/item/${encodeURIComponent(it.pdv)}`} style={{ fontWeight: 600, borderBottom: '1px solid transparent' }} className="itemlink">
