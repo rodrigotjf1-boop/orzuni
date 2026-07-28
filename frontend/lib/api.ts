@@ -7,6 +7,7 @@ export interface ItemCardapio {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
+  imagem: string | null;
 }
 
 export interface Shift {
@@ -23,6 +24,7 @@ export interface ItemDetalhe {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
+  imagem: string;
   complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
   disponibilidade: Shift[];
 }

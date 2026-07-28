@@ -26,7 +26,8 @@ export default function EditorPage() {
   const [preco, setPreco] = useState(0);
   const [status, setStatus] = useState<'no_ar' | 'pausado'>('no_ar');
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [imagem, setImagem] = useState<string | null>(null); // só quando trocada
+  const [imagem, setImagem] = useState<string | null>(null); // data-URI da foto NOVA (só quando trocada)
+  const [fotoAtual, setFotoAtual] = useState<string | null>(null); // URL da foto já cadastrada
   const [pdvNovo, setPdvNovo] = useState('');
   const [grupos, setGrupos] = useState<GrupoCompl[]>([]);
 
@@ -40,6 +41,7 @@ export default function EditorPage() {
       setStatus(d.status);
       setShifts(d.disponibilidade ?? []);
       setImagem(null);
+      setFotoAtual(d.imagem || null);
       setPdvNovo(d.pdv);
       setGrupos(normCompl(d.complementos ?? []));
       setErro(null);
@@ -134,8 +136,9 @@ export default function EditorPage() {
           <div className="card">
             <div style={{ marginBottom: 16 }}>
               <label style={label}>Foto</label>
-              <ImageUpload value={imagem ?? undefined} onPick={setImagem} />
-              {!imagem && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Escolha uma foto para atualizar a imagem do item.</div>}
+              <ImageUpload value={imagem ?? fotoAtual ?? undefined} onPick={setImagem} />
+              {imagem && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem', color: 'var(--tanger)' }}>Nova foto — publique para atualizar.</div>}
+              {!imagem && !fotoAtual && <div className="sub" style={{ marginTop: 6, fontSize: '.68rem' }}>Este item não tem foto. Escolha uma para adicionar.</div>}
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={label}>Nome</label>
