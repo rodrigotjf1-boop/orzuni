@@ -6,6 +6,9 @@ export interface Pendencia {
   mudancas: string[]; // lista legível do que mudou e não foi publicado
   publicar: () => Promise<boolean>; // aplica; true = sucesso
   descartar: () => void; // volta ao estado original
+  acaoLabel?: string; // rótulo do botão primário (padrão "Publicar e sair")
+  podePublicar?: boolean; // false = esconde o botão primário (ex.: criação inválida)
+  aviso?: string; // texto do aviso (padrão: "…e ainda não publicou")
 }
 
 interface PendingCtx {
@@ -76,7 +79,11 @@ export function PendingProvider({ children }: { children: React.ReactNode }) {
           <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(460px, 100%)' }}>
             <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Alterações não publicadas</h2>
             <div className="sub" style={{ marginBottom: 12 }}>
-              Você mexeu em <b>{pend.titulo}</b> e ainda não publicou. O que deseja fazer?
+              {pend.aviso ?? (
+                <>
+                  Você mexeu em <b>{pend.titulo}</b> e ainda não publicou. O que deseja fazer?
+                </>
+              )}
             </div>
             {pend.mudancas.length > 0 && (
               <div style={{ border: '1px solid var(--line)', borderRadius: 10, background: 'var(--ink)', padding: '10px 12px', marginBottom: 16 }}>
@@ -91,7 +98,9 @@ export function PendingProvider({ children }: { children: React.ReactNode }) {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button className="btn ghost mini" disabled={processando} onClick={() => setAcao(null)}>Cancelar</button>
               <button className="btn ghost mini" disabled={processando} onClick={descartarESeguir}>Descartar e sair</button>
-              <button className="btn" disabled={processando} onClick={publicarESeguir}>{processando ? 'Publicando…' : 'Publicar e sair'}</button>
+              {pend.podePublicar !== false && (
+                <button className="btn" disabled={processando} onClick={publicarESeguir}>{processando ? 'Salvando…' : pend.acaoLabel ?? 'Publicar e sair'}</button>
+              )}
             </div>
           </div>
         </div>
