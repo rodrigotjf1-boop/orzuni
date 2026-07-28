@@ -12,7 +12,7 @@ interface Grupo {
   grupo: string;
   min: number;
   max: number;
-  opcoes: Array<{ nome: string; preco: number }>;
+  opcoes: Array<{ nome: string; preco: number; pdv: string }>;
 }
 
 export default function NovoItemPage() {
@@ -57,15 +57,15 @@ export default function NovoItemPage() {
   const valido = erros.length === 0;
 
   function addGrupo() {
-    setGrupos((g) => [...g, { grupo: '', min: 1, max: 1, opcoes: [{ nome: '', preco: 0 }] }]);
+    setGrupos((g) => [...g, { grupo: '', min: 1, max: 1, opcoes: [{ nome: '', preco: 0, pdv: '' }] }]);
   }
   function upd(i: number, patch: Partial<Grupo>) {
     setGrupos((g) => g.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   }
   function addOpcao(i: number) {
-    setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: [...x.opcoes, { nome: '', preco: 0 }] } : x)));
+    setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: [...x.opcoes, { nome: '', preco: 0, pdv: '' }] } : x)));
   }
-  function updOpcao(i: number, j: number, patch: Partial<{ nome: string; preco: number }>) {
+  function updOpcao(i: number, j: number, patch: Partial<{ nome: string; preco: number; pdv: string }>) {
     setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: x.opcoes.map((o, m) => (m === j ? { ...o, ...patch } : o)) } : x)));
   }
 
@@ -82,7 +82,7 @@ export default function NovoItemPage() {
         pdv: pdv.trim() || undefined,
         imagem: imagem || undefined,
         complementos: grupos.length
-          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco })) }))
+          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined })) }))
           : undefined,
         shifts: shifts.length ? shifts : undefined,
       });
@@ -169,9 +169,10 @@ export default function NovoItemPage() {
             </div>
             <div style={{ marginTop: 10 }}>
               {g.opcoes.map((o, j) => (
-                <div key={j} style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
-                  <input style={{ ...box, flex: 1, padding: '8px 11px' }} value={o.nome} onChange={(e) => updOpcao(i, j, { nome: e.target.value })} placeholder="Opção" />
-                  <MoneyInput valor={o.preco} onChange={(v) => updOpcao(i, j, { preco: v })} style={{ width: 110, fontSize: '.82rem', padding: '8px 8px 8px 28px' }} ariaLabel="Preço da opção" />
+                <div key={j} style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input style={{ ...box, flex: 1, minWidth: 130, padding: '8px 11px' }} value={o.nome} onChange={(e) => updOpcao(i, j, { nome: e.target.value })} placeholder="Opção" />
+                  <input style={{ ...box, width: 108, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: '.78rem' }} value={o.pdv} onChange={(e) => updOpcao(i, j, { pdv: e.target.value })} placeholder="PDV" title="Código PDV da opção (opcional)" />
+                  <MoneyInput valor={o.preco} onChange={(v) => updOpcao(i, j, { preco: v })} style={{ width: 100, fontSize: '.82rem', padding: '8px 8px 8px 28px' }} ariaLabel="Preço da opção" />
                   {g.opcoes.length > 1 && <button className="btn ghost mini" onClick={() => setGrupos((x) => x.map((y, k) => (k === i ? { ...y, opcoes: y.opcoes.filter((_, m) => m !== j) } : y)))}>×</button>}
                 </div>
               ))}

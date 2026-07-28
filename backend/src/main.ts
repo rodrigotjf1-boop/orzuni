@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -17,7 +18,11 @@ async function bootstrap() {
     }
   }
 
-  const app = await NestFactory.create(AppModule);
+  // bodyParser: false + useBodyParser com limite maior — fotos vão como data-URI
+  // base64 no corpo (até 5 MB → ~6,7 MB em base64); o padrão de 100 KB dá 413.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  app.useBodyParser('json', { limit: '12mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '12mb' });
   app.use(helmet());
   // atrás do Traefik/EasyPanel (1 hop) → req.ip = IP real do cliente (X-Forwarded-For),
   // para o rate limit contar por cliente, não pela cota global do proxy.

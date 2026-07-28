@@ -25,7 +25,7 @@ export interface ItemDetalhe {
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
-  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number }> }>;
+  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
   disponibilidade: Shift[];
 }
 
@@ -164,7 +164,9 @@ export class CatalogoService {
         const o = flat?.options?.find((x) => x.id === oid);
         // o nome legível está no PRODUTO da opção; externalCode/id são só fallback
         const prod = flat?.products?.find((p) => p.id === o?.productId);
-        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', preco: o?.price?.value ?? 0 };
+        // PDV = externalCode da opção; os ORZ-* são gerados pelo app, então mostra vazio
+        const codigo = o?.externalCode && !o.externalCode.startsWith('ORZ-') ? o.externalCode : '';
+        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', preco: o?.price?.value ?? 0, pdv: codigo };
       }),
     }));
     return {
@@ -201,7 +203,7 @@ export class CatalogoService {
       shifts?: Shift[];
       imagem?: string;
       pdv?: string;
-      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>;
+      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
     },
   ): Promise<{ ok: boolean; erros: string[]; pdv?: string }> {
     const ref = await this.resolver(merchantId, pdv);
@@ -337,7 +339,7 @@ export class CatalogoService {
 
   /** Monta grupos/opções/produtos de complemento a partir do modelo canônico. */
   private montarComplementos(
-    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number }> }>,
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>,
   ) {
     const optionGroups: any[] = [];
     const options: any[] = [];
@@ -349,7 +351,9 @@ export class CatalogoService {
         const optId = randomUUID();
         const optProdId = randomUUID();
         optIds.push(optId);
-        options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: 'ORZ-OPT-' + optId.slice(0, 8) });
+        // código PDV da opção (integração Regem/iFood); vazio = gera um ORZ-* automático
+        const ext = o.pdv?.trim() || 'ORZ-OPT-' + optId.slice(0, 8);
+        options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: ext });
         optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8) });
       }
       optionGroups.push({

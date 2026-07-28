@@ -10,7 +10,7 @@ import { ImageUpload } from '@/components/image-upload';
 import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
 
 const normCompl = (cs: ItemDetalhe['complementos']): GrupoCompl[] =>
-  cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco })) }));
+  cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco, pdv: o.pdv })) }));
 
 export default function EditorPage() {
   const { pdv } = useParams<{ pdv: string }>();
@@ -73,7 +73,7 @@ export default function EditorPage() {
     if (complMudou)
       campos.complementos = grupos
         .filter((g) => g.grupo.trim())
-        .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco })) }));
+        .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined })) }));
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {
