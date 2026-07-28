@@ -217,7 +217,12 @@ export class CatalogoService {
     if (campos.shifts !== undefined) erros.push(...validarShifts(campos.shifts));
     if (erros.length) return { ok: false, erros };
 
-    // foto nova (opcional): sobe e resolve o imagePath antes do PUT /products
+    // estado atual (o PUT /products é REPLACE — precisamos do produto atual para não
+    // apagar nome/descrição/foto ao mudar só um deles). Reaproveitado no re-PUT abaixo.
+    const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
+    const mainProd: any = flat?.products?.find((p) => p.id === (flat?.item?.productId ?? ref.item.productId)) ?? flat?.products?.[0];
+
+    // foto nova (opcional): sobe e resolve o imagePath
     let imagePath: string | undefined;
     if (campos.imagem) {
       imagePath = (await this.ifood.uploadImage(merchantId, campos.imagem)) ?? undefined;
@@ -225,12 +230,18 @@ export class CatalogoService {
     }
 
     if (campos.nome !== undefined || campos.descricao !== undefined || imagePath) {
+      // PUT /products é REPLACE e exige name + serving (enum). Reenviar nome/descrição/
+      // serving/foto atuais, sobrescrevendo só o que mudou. imagePath vai RELATIVO
+      // (sem o domínio) — é o formato que o upload devolve e o PUT aceita.
+      const imgBruta = imagePath ?? mainProd?.imagePath;
+      const img = imgBruta ? String(imgBruta).replace(/^https?:\/\/[^/]+\//, '') : undefined;
       const ok = await this.ifood.updateProduct(merchantId, ref.item.productId, {
-        ...(campos.nome !== undefined ? { name: campos.nome } : {}),
-        ...(campos.descricao !== undefined ? { description: campos.descricao } : {}),
-        ...(imagePath ? { imagePath } : {}),
+        name: (campos.nome ?? mainProd?.name ?? ref.nome).trim(),
+        description: campos.descricao ?? mainProd?.description ?? '',
+        serving: mainProd?.serving ?? 'NOT_APPLICABLE',
+        ...(img ? { imagePath: img } : {}),
       });
-      if (!ok) erros.push('nome/descrição');
+      if (!ok) erros.push(imagePath ? 'foto' : 'nome/descrição');
     }
     if (campos.preco !== undefined) {
       const r = await this.reprecificar(merchantId, [{ pdv, preco: campos.preco }]);
@@ -245,7 +256,6 @@ export class CatalogoService {
     const mudouPdv = !!novoPdv && novoPdv !== pdv;
     const mudouCompl = campos.complementos !== undefined;
     if (campos.shifts !== undefined || mudouPdv || mudouCompl) {
-      const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
       if (flat) {
         // o flat traz campos derivados/read-only (weight com unidade inválida,
         // industrialized) que o PUT rejeita — remover antes de reenviar.
