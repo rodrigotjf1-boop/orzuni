@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, type Shift } from '@/lib/api';
+import { api, type Shift, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
-import { MoneyInput } from '@/components/money';
+import { MoneyInput, brl } from '@/components/money';
 import { usePending } from '@/components/pending-changes';
 
 type Tipo = 'ingredientes' | 'especificacao';
@@ -19,6 +19,7 @@ interface Custom {
 interface Opcao {
   nome: string;
   preco: number;
+  refPdv?: string; // set = referencia um item já cadastrado do cardápio
   customizacoes: Custom[];
 }
 interface Grupo {
@@ -54,9 +55,19 @@ export default function NovoComboPage() {
   const [grupos, setGrupos] = useState<Grupo[]>([
     { nome: '', principal: true, min: 1, max: 1, opcoes: [{ nome: '', preco: 0, customizacoes: [] }] },
   ]);
+  const [modoPreco, setModoPreco] = useState<'produtos' | 'combo'>('produtos');
+  const [precoTotal, setPrecoTotal] = useState(0);
+  const [desconto, setDesconto] = useState(0);
+  const [itens, setItens] = useState<ItemCardapio[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+
+  // itens já cadastrados (para referenciar em uma opção)
+  useEffect(() => {
+    api.cardapio().then((r) => setItens(r.itens.filter((i) => i.pdv))).catch(() => {});
+  }, []);
+  const precoFinal = Math.max(0, precoTotal * (1 - (desconto || 0) / 100));
 
   const updGrupo = (gi: number, patch: Partial<Grupo>) => setGrupos((g) => g.map((x, k) => (k === gi ? { ...x, ...patch } : x)));
   const marcarPrincipal = (gi: number) => setGrupos((g) => g.map((x, k) => ({ ...x, principal: k === gi })));
@@ -77,8 +88,9 @@ export default function NovoComboPage() {
   grupos.forEach((g, i) => {
     if (!g.nome.trim()) erros.push(`grupo ${i + 1} sem nome`);
     if (g.max < g.min || g.max < 1) erros.push(`grupo "${g.nome || i + 1}": mín/máx inválidos`);
-    if (!g.opcoes.some((o) => o.nome.trim())) erros.push(`grupo "${g.nome || i + 1}" sem opções`);
+    if (!g.opcoes.some((o) => o.nome.trim() || o.refPdv)) erros.push(`grupo "${g.nome || i + 1}" sem opções`);
   });
+  if (modoPreco === 'combo' && precoTotal <= 0) erros.push('informe o preço total do combo');
   const valido = erros.length === 0;
 
   async function salvarInterno(): Promise<boolean> {
@@ -90,17 +102,17 @@ export default function NovoComboPage() {
         nome: nome.trim(),
         categoria: categoria.trim(),
         pdv: pdv.trim() || undefined,
+        modoPreco,
+        ...(modoPreco === 'combo' ? { precoTotal, descontoPct: desconto || 0 } : {}),
         grupos: grupos.map((g) => ({
           nome: g.nome.trim(),
           principal: g.principal,
           min: g.min,
           max: g.max,
           opcoes: g.opcoes
-            .filter((o) => o.nome.trim())
-            .map((o) => ({
-              nome: o.nome.trim(),
-              preco: o.preco,
-              customizacoes: o.customizacoes.length
+            .filter((o) => o.nome.trim() || o.refPdv)
+            .map((o) => {
+              const customizacoes = o.customizacoes.length
                 ? o.customizacoes
                     .filter((c) => c.nome.trim())
                     .map((c) => ({
@@ -110,8 +122,10 @@ export default function NovoComboPage() {
                       max: c.max,
                       opcoes: c.opcoes.filter((co) => co.nome.trim()).map((co) => ({ nome: co.nome.trim(), preco: co.preco })),
                     }))
-                : undefined,
-            })),
+                : undefined;
+              // referencia item existente OU cria produto novo
+              return o.refPdv ? { refPdv: o.refPdv, customizacoes } : { nome: o.nome.trim(), preco: o.preco, customizacoes };
+            }),
         })),
         shifts: shifts.length ? shifts : undefined,
       });
@@ -203,8 +217,36 @@ export default function NovoComboPage() {
             {g.opcoes.map((o, oi) => (
               <div key={oi} style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--ink2)', padding: 12, marginTop: 8 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input style={{ ...box, flex: 1, minWidth: 140, padding: '9px 12px' }} value={o.nome} onChange={(e) => updOpcao(gi, oi, { nome: e.target.value })} placeholder="Opção (ex.: X-Burger)" />
-                  <PrecoInput v={o.preco} onChange={(v) => updOpcao(gi, oi, { preco: v })} />
+                  <select
+                    value={o.refPdv ?? ''}
+                    onChange={(e) => {
+                      const p = e.target.value;
+                      if (!p) updOpcao(gi, oi, { refPdv: undefined, nome: '', preco: 0 });
+                      else {
+                        const it = itens.find((i) => i.pdv === p);
+                        updOpcao(gi, oi, { refPdv: p, nome: it?.nome ?? '', preco: it?.preco ?? 0 });
+                      }
+                    }}
+                    title="Criar um produto novo ou usar um item já cadastrado no cardápio"
+                    style={{ background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.8rem', padding: '9px 10px', maxWidth: 200, cursor: 'pointer' }}
+                  >
+                    <option value="">✍️ Criar novo</option>
+                    {itens.length > 0 && <optgroup label="Do cardápio">{itens.map((i) => <option key={i.pdv} value={i.pdv!}>{i.nome}</option>)}</optgroup>}
+                  </select>
+                  {o.refPdv ? (
+                    <span style={{ flex: 1, minWidth: 130, padding: '9px 12px', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, fontSize: '.9rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {o.nome || '(item)'}
+                      <span className="mono" style={{ color: 'var(--dim)', fontSize: '.58rem' }}>· do cardápio</span>
+                    </span>
+                  ) : (
+                    <input style={{ ...box, flex: 1, minWidth: 130, padding: '9px 12px' }} value={o.nome} onChange={(e) => updOpcao(gi, oi, { nome: e.target.value })} placeholder="Opção (ex.: X-Burger)" />
+                  )}
+                  {modoPreco === 'produtos' &&
+                    (o.refPdv ? (
+                      <span className="mono" style={{ color: 'var(--dim)', fontSize: '.82rem', minWidth: 74, textAlign: 'right' }}>R$ {brl(o.preco)}</span>
+                    ) : (
+                      <PrecoInput v={o.preco} onChange={(v) => updOpcao(gi, oi, { preco: v })} />
+                    ))}
                   {g.opcoes.length > 1 && <button className="btn ghost mini" onClick={() => delOpcao(gi, oi)}>×</button>}
                 </div>
                 <CustomEditor customs={o.customizacoes} onChange={(cs) => setCustoms(gi, oi, cs)} />
@@ -216,6 +258,45 @@ export default function NovoComboPage() {
       ))}
 
       <button className="btn ghost" style={{ marginTop: 14 }} onClick={addGrupo}>+ Grupo</button>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h2 style={{ fontSize: '1.02rem', fontWeight: 700, marginBottom: 4 }}>Como cobrar o combo?</h2>
+        <div className="sub" style={{ marginBottom: 12 }}>Escolha a modalidade de preço.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {[
+            { v: 'produtos', t: 'Preço nos produtos', d: 'O combo custa a soma dos itens escolhidos pelo cliente.' },
+            { v: 'combo', t: 'Preço no combo', d: 'Você define um preço fixo com desconto — vira uma oferta “de/por”.' },
+          ].map((m) => (
+            <label
+              key={m.v}
+              onClick={() => setModoPreco(m.v as 'produtos' | 'combo')}
+              style={{ border: `1px solid ${modoPreco === m.v ? 'var(--tanger)' : 'var(--line)'}`, borderRadius: 12, padding: 12, cursor: 'pointer', background: modoPreco === m.v ? 'rgba(255,162,38,.06)' : 'var(--ink)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                <input type="radio" name="modoPreco" checked={modoPreco === m.v} onChange={() => setModoPreco(m.v as 'produtos' | 'combo')} style={{ accentColor: 'var(--tanger)' }} />
+                {m.t}
+              </div>
+              <div className="sub" style={{ margin: '6px 0 0', fontSize: '.75rem' }}>{m.d}</div>
+            </label>
+          ))}
+        </div>
+        {modoPreco === 'combo' && (
+          <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={label}>Preço total</label>
+              <MoneyInput valor={precoTotal} onChange={setPrecoTotal} style={{ width: 130 }} ariaLabel="Preço total do combo" />
+            </div>
+            <div>
+              <label style={label}>Desconto (%)</label>
+              <input type="number" min={0} max={99} value={desconto} onChange={(e) => setDesconto(Math.min(99, Math.max(0, +e.target.value)))} style={{ ...num, width: 84 }} />
+            </div>
+            <div>
+              <label style={label}>Preço final</label>
+              <div className="mono" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--tanger)', padding: '4px 0' }}>R$ {brl(precoFinal)}</div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="card" style={{ marginTop: 16 }}>
         <h2 style={{ fontSize: '1.02rem', fontWeight: 700, marginBottom: 6 }}>Disponibilidade</h2>

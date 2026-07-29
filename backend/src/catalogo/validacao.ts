@@ -140,13 +140,20 @@ export interface GrupoCombo {
   principal?: boolean;
   min: number;
   max: number;
-  opcoes: Array<{ nome: string; preco: number; customizacoes?: CustomizacaoCombo[] }>;
+  // opção: `refPdv` = PDV de um item JÁ cadastrado (referencia o produto existente);
+  // sem refPdv = cria um produto novo (nome obrigatório).
+  opcoes: Array<{ nome?: string; preco?: number; refPdv?: string; customizacoes?: CustomizacaoCombo[] }>;
 }
 export interface DadosCombo {
   nome?: string;
   categoria?: string;
   categoriaId?: string;
   pdv?: string;
+  // modalidade de preço: 'produtos' (soma dos escolhidos, padrão) ou 'combo'
+  // (preço fixo do combo = precoTotal com descontoPct% → item.price value/originalValue).
+  modoPreco?: 'produtos' | 'combo';
+  precoTotal?: number; // modo 'combo': valor cheio (de)
+  descontoPct?: number; // modo 'combo': % de desconto (0–100)
   grupos?: GrupoCombo[];
   shifts?: Shift[];
 }
@@ -161,13 +168,21 @@ export function validarCombo(d: DadosCombo): string[] {
   const principais = (d.grupos ?? []).filter((g) => g.principal).length;
   if ((d.grupos?.length ?? 0) > 0 && principais !== 1) e.push('o combo precisa de exatamente um grupo principal');
 
+  // modalidade de preço "combo": precisa do valor total; desconto entre 0 e 100
+  if (d.modoPreco === 'combo') {
+    if (typeof d.precoTotal !== 'number' || isNaN(d.precoTotal) || d.precoTotal <= 0) e.push('preço total do combo é obrigatório');
+    if (d.descontoPct != null && (isNaN(d.descontoPct) || d.descontoPct < 0 || d.descontoPct >= 100)) e.push('desconto deve ser entre 0 e 100%');
+  }
+
   for (const g of d.grupos ?? []) {
     if (!g.nome?.trim()) e.push('grupo sem nome');
     if (g.min < 0 || g.max < g.min || g.max < 1) e.push(`grupo "${g.nome}": min/max inválidos`);
     if (!g.opcoes?.length) e.push(`grupo "${g.nome}" precisa de ao menos uma opção`);
     for (const o of g.opcoes ?? []) {
-      if (!o.nome?.trim()) e.push(`grupo "${g.nome}": opção sem nome`);
-      if (typeof o.preco !== 'number' || isNaN(o.preco) || o.preco < 0) e.push(`opção "${o.nome}": preço inválido`);
+      // opção que referencia item existente: nome/preço vêm do item → não exige aqui
+      const refExistente = !!o.refPdv?.trim();
+      if (!refExistente && !o.nome?.trim()) e.push(`grupo "${g.nome}": opção sem nome`);
+      if (!refExistente && (typeof o.preco !== 'number' || isNaN(o.preco) || o.preco < 0)) e.push(`opção "${o.nome}": preço inválido`);
       for (const c of o.customizacoes ?? []) {
         if (!c.nome?.trim()) e.push(`opção "${o.nome}": customização sem nome`);
         if (c.tipo !== 'ingredientes' && c.tipo !== 'especificacao') e.push(`customização "${c.nome}": tipo inválido`);
