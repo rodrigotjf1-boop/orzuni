@@ -22,6 +22,7 @@ export interface ItemDetalhe {
   nome: string;
   descricao: string;
   categoria: string;
+  tipo: string; // DEFAULT | PIZZA | COMBO_V2 — o editor esconde complementos p/ combo/pizza
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
@@ -50,6 +51,20 @@ export interface ItemCanonico {
 export class CatalogoService {
   private readonly logger = new Logger('catalogo');
   constructor(private readonly ifood: IfoodCatalogService) {}
+
+  /**
+   * Normaliza um imagePath do iFood para REENVIO no PUT: tira o host E o prefixo
+   * "pratos/". O iFood re-adiciona "pratos/" ao servir; se não tirarmos, cada
+   * salvamento duplica o prefixo ("pratos/pratos/…") até passar de 120 chars — a
+   * foto "some" (caminho inválido) e o PUT passa a falhar. Idempotente.
+   */
+  private imgRel(u?: string | null): string | undefined {
+    if (!u) return undefined;
+    const rel = String(u)
+      .replace(/^https?:\/\/[^/]+\//, '')
+      .replace(/^(pratos\/)+/i, '');
+    return rel || undefined;
+  }
 
   /** Cardápio consolidado, já com estado no ar/pausado e a promoção de/por. */
   async cardapio(merchantId: string): Promise<ItemCanonico[]> {
@@ -177,6 +192,7 @@ export class CatalogoService {
       nome: ref.nome,
       descricao: (produto as any)?.description ?? '',
       categoria: ref.categoria,
+      tipo: (flat?.item as any)?.type ?? (ref.item as any).type ?? 'DEFAULT',
       preco: preco?.value ?? 0,
       promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
       status: this.noAr(ref.item) ? 'no_ar' : 'pausado',
@@ -224,7 +240,7 @@ export class CatalogoService {
     let imagePath: string | undefined;
     if (campos.imagem) {
       const up = await this.ifood.uploadImage(merchantId, campos.imagem);
-      imagePath = up ? up.replace(/^https?:\/\/[^/]+\//, '') : undefined;
+      imagePath = this.imgRel(up);
       if (!imagePath) erros.push('foto');
     }
 
@@ -240,7 +256,11 @@ export class CatalogoService {
     // que reenvia o PRODUTO COMPLETO e preserva serving/ean/etc. — mais robusto que PUT /products).
     const novoPdv = campos.pdv?.trim();
     const mudouPdv = !!novoPdv && novoPdv !== pdv;
-    const mudouCompl = campos.complementos !== undefined;
+    // complementos só são reconstruídos para itens DEFAULT — em COMBO/PIZZA o rebuild
+    // simples destruiria a estrutura (grupo MAIN do combo, SIZE/CRUST/EDGE/TOPPING da
+    // pizza). O editor esconde complementos nesses tipos; aqui é a trava de segurança.
+    const tipoItem = (flat?.item as any)?.type ?? 'DEFAULT';
+    const mudouCompl = campos.complementos !== undefined && tipoItem === 'DEFAULT';
     const mudouProduto = campos.nome !== undefined || campos.descricao !== undefined || !!imagePath;
     if (campos.shifts !== undefined || mudouPdv || mudouCompl || mudouProduto) {
       if (flat) {
@@ -252,7 +272,7 @@ export class CatalogoService {
         };
         const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
         // a foto no flat vem como URL completa; o PUT quer relativo
-        principal.forEach((p) => { if (p.imagePath) p.imagePath = String(p.imagePath).replace(/^https?:\/\/[^/]+\//, ''); });
+        principal.forEach((p) => { if (p.imagePath) p.imagePath = this.imgRel(p.imagePath); });
         // aplica nome/descrição/foto novos no produto principal
         if (mudouProduto && principal[0]) {
           if (campos.nome !== undefined) principal[0].name = campos.nome.trim();
@@ -377,9 +397,9 @@ export class CatalogoService {
         if (o.imagem) {
           if (o.imagem.startsWith('data:')) {
             const up = await this.ifood.uploadImage(merchantId, o.imagem);
-            imagePath = up ? up.replace(/^https?:\/\/[^/]+\//, '') : undefined;
+            imagePath = this.imgRel(up);
           } else {
-            imagePath = o.imagem.replace(/^https?:\/\/[^/]+\//, '');
+            imagePath = this.imgRel(o.imagem);
           }
         }
         options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: ext });
@@ -608,7 +628,7 @@ export class CatalogoService {
     const prod = flat?.products?.find((p) => p.id === (ref.item as any).productId) ?? flat?.products?.[0];
     if (!prod) return null;
     const { weight, industrialized, optionGroups, ...limpo } = prod as any; // tira grupos p/ não pendurar refs órfãs
-    if (limpo.imagePath) limpo.imagePath = String(limpo.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+    if (limpo.imagePath) limpo.imagePath = this.imgRel(limpo.imagePath);
     const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
     const preco = (ctx?.price ?? ref.item.price)?.value ?? 0;
     return { product: limpo, preco };
@@ -697,8 +717,19 @@ export class CatalogoService {
       gruposPrincipais.push({ id: groupId, min: g.min, max: g.max, index: gi, ...(g.principal ? { associationType: 'MAIN' } : {}) });
     });
 
+    // foto do combo (opcional): sobe e usa no produto principal
+    let imgCombo: string | undefined;
+    if (d.imagem) imgCombo = this.imgRel(await this.ifood.uploadImage(merchantId, d.imagem));
+
     // produto principal do combo referencia os grupos de nível 2
-    products.unshift({ id: productId, name: d.nome!.trim(), externalCode: ext, optionGroups: gruposPrincipais });
+    products.unshift({
+      id: productId,
+      name: d.nome!.trim(),
+      ...(d.descricao?.trim() ? { description: d.descricao.trim() } : {}),
+      ...(imgCombo ? { imagePath: imgCombo } : {}),
+      externalCode: ext,
+      optionGroups: gruposPrincipais,
+    });
 
     // preço do combo: fixo (de/por) no modo 'combo'; senão soma das opções (item a 0)
     const precoItem =
@@ -753,7 +784,7 @@ export class CatalogoService {
     };
     const tipo = (flat.item as any).type ?? 'DEFAULT';
     const novoPdv = 'ORZ-CP-' + Date.now();
-    const relImg = (u: any) => (u ? String(u).replace(/^https?:\/\/[^/]+\//, '') : u);
+    const relImg = (u: any) => this.imgRel(u);
 
     // produtos: id novo, externalCode fresco, foto relativa; o principal ganha " (cópia)"
     const products = (flat.products ?? []).map(limpar).map((p: any) => {
@@ -929,7 +960,7 @@ export class CatalogoService {
         .map(limpar)
         .map((p: any) => {
           const np = { ...p };
-          if (np.imagePath) np.imagePath = String(np.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+          if (np.imagePath) np.imagePath = this.imgRel(np.imagePath);
           if (Array.isArray(np.optionGroups)) np.optionGroups = np.optionGroups.filter((r: any) => r.id !== grupoId);
           return np;
         });
@@ -981,7 +1012,7 @@ export class CatalogoService {
           .map(limpar)
           .map((p: any) => {
             const np = { ...p };
-            if (np.imagePath) np.imagePath = String(np.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+            if (np.imagePath) np.imagePath = this.imgRel(np.imagePath);
             if (Array.isArray(np.optionGroups)) np.optionGroups = np.optionGroups.map((r: any) => (r.id === grupoId ? { id: grupoId, min: dados.min, max: dados.max } : r));
             return np;
           }),
