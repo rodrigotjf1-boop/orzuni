@@ -7,6 +7,14 @@ import { brl } from '@/components/money';
 import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
 
 const grupoNoAr = (g: GrupoComplemento) => g.opcoes.length > 0 && g.opcoes.every((o) => o.status === 'no_ar');
+// status do grupo: no ar (todas ativas), pausado (todas pausadas) ou parcial (algumas)
+function grupoStatus(g: GrupoComplemento): 'no_ar' | 'pausado' | 'parcial' {
+  if (!g.opcoes.length) return 'pausado';
+  const ativas = g.opcoes.filter((o) => o.status === 'no_ar').length;
+  if (ativas === g.opcoes.length) return 'no_ar';
+  if (ativas === 0) return 'pausado';
+  return 'parcial';
+}
 
 export default function ComplementosPage() {
   const [grupos, setGrupos] = useState<GrupoComplemento[] | null>(null);
@@ -45,6 +53,23 @@ export default function ComplementosPage() {
       toast(`Erro: ${e.message}`);
     } finally {
       setOcupado(null);
+    }
+  }
+
+  // pausa/reativa UMA opção — cascateia para todos os itens que usam o grupo.
+  async function alternarOpcao(g: GrupoComplemento, idx: number) {
+    const o = g.opcoes[idx];
+    const novo = o.status === 'no_ar' ? 'pausado' : 'no_ar';
+    const aplicar = (st: 'no_ar' | 'pausado') =>
+      setGrupos((l) => l?.map((x) => (x.id === g.id ? { ...x, opcoes: x.opcoes.map((oo, i) => (i === idx ? { ...oo, status: st } : oo)) } : x)) ?? null);
+    aplicar(novo); // otimista
+    try {
+      const r = await api.statusOpcao(o.id, novo);
+      if (!r.ok) throw new Error(r.erro || 'falhou');
+      toast(`<b>${o.nome}</b> ${novo === 'pausado' ? 'pausado' : 'reativado'} — vale em todos os itens do grupo.`);
+    } catch (e: any) {
+      aplicar(o.status); // reverte
+      toast(`Erro: ${e.message}`);
     }
   }
 
@@ -133,7 +158,9 @@ export default function ComplementosPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
         {lista.map((g) => {
+          const st = grupoStatus(g);
           const noAr = grupoNoAr(g);
+          const pillTxt = st === 'no_ar' ? 'no ar' : st === 'parcial' ? 'parcial' : 'pausado';
           return (
             <div key={g.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -143,27 +170,39 @@ export default function ComplementosPage() {
                     {g.opcoes.length} opç{g.opcoes.length === 1 ? 'ão' : 'ões'} · escolha {g.min}–{g.max}
                   </div>
                 </div>
-                <span className={`pill ${noAr ? 'on' : 'off'}`}>
+                <span className={`pill ${st === 'no_ar' ? 'on' : 'off'}`}>
                   <span className="dotp" />
-                  {noAr ? 'no ar' : 'pausado'}
+                  {pillTxt}
                 </span>
               </div>
 
-              {/* opções */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {g.opcoes.slice(0, 8).map((o, i) => (
-                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 999, padding: '3px 9px 3px 4px', fontSize: '.78rem' }}>
-                    {o.imagem ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={o.imagem} alt="" style={{ width: 20, height: 20, borderRadius: 999, objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ width: 20, height: 20, borderRadius: 999, background: 'var(--ink2)', flex: 'none' }} />
-                    )}
-                    {o.nome}
-                    {o.preco > 0 && <span className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem' }}>+{brl(o.preco)}</span>}
-                  </span>
-                ))}
-                {g.opcoes.length > 8 && <span className="sub" style={{ alignSelf: 'center' }}>+{g.opcoes.length - 8}</span>}
+              {/* opções — pausar/reativar cada uma (cascateia p/ todos os itens do grupo) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {g.opcoes.map((o, i) => {
+                  const pausada = o.status === 'pausado';
+                  return (
+                    <div key={o.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                      {o.imagem ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={o.imagem} alt="" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover', flex: 'none', opacity: pausada ? 0.5 : 1 }} />
+                      ) : (
+                        <span style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--ink)', border: '1px solid var(--line)', flex: 'none' }} />
+                      )}
+                      <span style={{ flex: 1, minWidth: 0, fontSize: '.85rem', color: pausada ? 'var(--dim)' : 'var(--cream)', textDecoration: pausada ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {o.nome}
+                      </span>
+                      {o.preco > 0 && <span className="mono" style={{ color: 'var(--dim)', fontSize: '.64rem' }}>+{brl(o.preco)}</span>}
+                      <button
+                        className="btn ghost mini"
+                        onClick={() => alternarOpcao(g, i)}
+                        title={pausada ? 'Reativar esta opção' : 'Pausar esta opção (ex.: acabou)'}
+                        style={{ fontSize: '.66rem', padding: '4px 9px', flex: 'none' }}
+                      >
+                        {pausada ? 'Reativar' : 'Pausar'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* itens associados */}
@@ -172,10 +211,10 @@ export default function ComplementosPage() {
                 {g.itens.length ? g.itens.map((i) => i.nome).join(', ') : '— nenhum item'}
               </div>
 
-              {/* ações */}
+              {/* ações do grupo */}
               <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 6, flexWrap: 'wrap' }}>
                 <button className="btn ghost mini" disabled={ocupado === g.id} onClick={() => alternar(g)}>
-                  {ocupado === g.id ? '…' : noAr ? 'Pausar' : 'Reativar'}
+                  {ocupado === g.id ? '…' : noAr ? 'Pausar todas' : 'Reativar todas'}
                 </button>
                 <button className="btn ghost mini" disabled={ocupado === g.id} onClick={() => abrirEditar(g)}>Editar</button>
                 <button className="btn ghost mini" style={{ color: 'var(--coral, #e5533d)', marginLeft: 'auto' }} disabled={ocupado === g.id} onClick={() => setConfirmar(g)}>Remover</button>

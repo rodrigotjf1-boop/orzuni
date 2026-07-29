@@ -180,9 +180,6 @@ export default function CardapioPage() {
             onChange={(e) => setBusca(e.target.value)}
             style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '11px 14px', minWidth: 180 }}
           />
-          <Link href="/complementos" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
-            Complementos
-          </Link>
           <Link href="/item/novo" className="btn" style={{ whiteSpace: 'nowrap' }}>
             + Novo item
           </Link>
@@ -195,6 +192,9 @@ export default function CardapioPage() {
           <button className="btn ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setModalCat(true)}>
             + Categoria
           </button>
+          <Link href="/complementos" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
+            Complementos
+          </Link>
         </div>
       </div>
 

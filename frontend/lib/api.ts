@@ -59,7 +59,7 @@ export interface GrupoComplemento {
   tipo: string;
   min: number;
   max: number;
-  opcoes: Array<{ nome: string; preco: number; status: 'no_ar' | 'pausado'; pdv: string; imagem: string }>;
+  opcoes: Array<{ id: string; nome: string; preco: number; status: 'no_ar' | 'pausado'; pdv: string; imagem: string }>;
   itens: Array<{ nome: string; pdv: string | null }>;
 }
 
@@ -136,6 +136,8 @@ export const api = {
   complementos: () => req<{ grupos: GrupoComplemento[] }>('v1/complementos'),
   statusGrupo: (grupoId: string, status: 'no_ar' | 'pausado') =>
     req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  statusOpcao: (optionId: string, status: 'no_ar' | 'pausado') =>
+    req<{ ok: boolean; erro?: string }>(`v1/complementos/opcao/${encodeURIComponent(optionId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   editarGrupo: (grupoId: string, dados: { nome: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }) =>
     req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'PATCH', body: JSON.stringify(dados) }),
   removerGrupo: (grupoId: string) => req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'DELETE' }),

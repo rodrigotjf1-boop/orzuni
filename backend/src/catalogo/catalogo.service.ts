@@ -806,7 +806,7 @@ export class CatalogoService {
                 const o = flat.options?.find((x) => x.id === oid);
                 const prod = flat.products?.find((p) => p.id === o?.productId);
                 const codigo = o?.externalCode && !o.externalCode.startsWith('ORZ-') ? o.externalCode : '';
-                return { nome: (prod as any)?.name ?? oid, preco: o?.price?.value ?? 0, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
+                return { id: oid, nome: (prod as any)?.name ?? oid, preco: o?.price?.value ?? 0, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
               }),
               itens: [] as Array<{ nome: string; pdv: string | null }>,
               itemIds: [] as string[],
@@ -833,6 +833,16 @@ export class CatalogoService {
       opcoes: g.opcoes,
       itens: g.itens,
     }));
+  }
+
+  /**
+   * Pausa/reativa UMA opção (ex.: acabou a Coca). Como a opção é global (mesmo id em
+   * todos os itens que usam o grupo), o efeito CASCATEIA para todos eles — é o
+   * comportamento desejado para "falta de item".
+   */
+  async statusOpcao(merchantId: string, optionId: string, status: 'no_ar' | 'pausado'): Promise<{ ok: boolean; erro?: string }> {
+    const ok = await this.ifood.setOptionStatus(merchantId, optionId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
+    return ok ? { ok: true } : { ok: false, erro: 'não consegui atualizar a opção' };
   }
 
   /** Pausa/reativa um grupo = aplica o status a TODAS as opções do grupo. */

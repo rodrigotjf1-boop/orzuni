@@ -115,6 +115,12 @@ export class CatalogoController {
     return { grupos: await this.catalogo.complementos(await this.merchant(req, loja)) };
   }
 
+  /** PATCH /v1/complementos/opcao/:optionId/status — pausa/reativa UMA opção (cascateia p/ todos os itens do grupo). */
+  @Patch('complementos/opcao/:optionId/status')
+  async statusOpcao(@Req() req: any, @Param('optionId') optionId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
+    return this.catalogo.statusOpcao(await this.merchant(req, loja), optionId, body.status);
+  }
+
   /** PATCH /v1/complementos/:grupoId/status — pausa/reativa o grupo inteiro. */
   @Patch('complementos/:grupoId/status')
   async statusGrupo(@Req() req: any, @Param('grupoId') grupoId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
