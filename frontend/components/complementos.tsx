@@ -1,11 +1,18 @@
 'use client';
 import { MoneyInput } from '@/components/money';
+import { ImagemMini } from '@/components/image-upload';
 
+export interface OpcaoCompl {
+  nome: string;
+  preco: number;
+  pdv: string;
+  imagem?: string | null; // data-URI (nova) ou URL (atual); a imagem é redimensionada no cliente
+}
 export interface GrupoCompl {
   grupo: string;
   min: number;
   max: number;
-  opcoes: Array<{ nome: string; preco: number; pdv: string }>;
+  opcoes: OpcaoCompl[];
 }
 
 const box = { width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.88rem', padding: '9px 11px' } as const;
@@ -17,7 +24,7 @@ export function ComplementosEditor({ grupos, onChange }: { grupos: GrupoCompl[];
   const addG = () => onChange([...grupos, { grupo: '', min: 0, max: 1, opcoes: [{ nome: '', preco: 0, pdv: '' }] }]);
   const delG = (i: number) => onChange(grupos.filter((_, k) => k !== i));
   const addO = (i: number) => onChange(grupos.map((g, k) => (k === i ? { ...g, opcoes: [...g.opcoes, { nome: '', preco: 0, pdv: '' }] } : g)));
-  const updO = (i: number, j: number, patch: Partial<{ nome: string; preco: number; pdv: string }>) =>
+  const updO = (i: number, j: number, patch: Partial<OpcaoCompl>) =>
     onChange(grupos.map((g, k) => (k === i ? { ...g, opcoes: g.opcoes.map((o, m) => (m === j ? { ...o, ...patch } : o)) } : g)));
   const delO = (i: number, j: number) => onChange(grupos.map((g, k) => (k === i ? { ...g, opcoes: g.opcoes.filter((_, m) => m !== j) } : g)));
 
@@ -37,6 +44,7 @@ export function ComplementosEditor({ grupos, onChange }: { grupos: GrupoCompl[];
           <div style={{ marginTop: 8 }}>
             {g.opcoes.map((o, j) => (
               <div key={j} style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <ImagemMini value={o.imagem ?? null} onPick={(uri) => updO(i, j, { imagem: uri })} />
                 <input style={{ ...box, flex: 1, minWidth: 110, padding: '7px 10px' }} value={o.nome} onChange={(e) => updO(i, j, { nome: e.target.value })} placeholder="Opção" />
                 <input style={{ ...box, width: 92, padding: '7px 8px', fontFamily: 'var(--font-mono)', fontSize: '.72rem' }} value={o.pdv} onChange={(e) => updO(i, j, { pdv: e.target.value })} placeholder="PDV" title="Código PDV da opção (opcional)" />
                 <MoneyInput valor={o.preco} onChange={(v) => updO(i, j, { preco: v })} style={{ width: 96, fontSize: '.8rem', padding: '7px 8px 7px 28px' }} ariaLabel="Preço da opção" />

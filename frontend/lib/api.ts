@@ -53,6 +53,16 @@ export interface Alerta {
   foraHaMs: number;
 }
 
+export interface GrupoComplemento {
+  id: string;
+  nome: string;
+  tipo: string;
+  min: number;
+  max: number;
+  opcoes: Array<{ nome: string; preco: number; status: 'no_ar' | 'pausado'; pdv: string; imagem: string }>;
+  itens: Array<{ nome: string; pdv: string | null }>;
+}
+
 export interface EventoTelemetria {
   ts: string;
   nivel: 'error' | 'warn' | 'info';
@@ -118,9 +128,17 @@ export const api = {
     categoria: string;
     pdv?: string;
     imagem?: string;
-    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
     shifts?: Shift[];
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/itens', { method: 'POST', body: JSON.stringify(dados) }),
+  duplicar: (pdv: string) => req<{ ok: boolean; pdv?: string; erro?: string }>(`v1/itens/${encodeURIComponent(pdv)}/duplicar`, { method: 'POST' }),
+  remover: (pdv: string) => req<{ ok: boolean; erro?: string }>(`v1/itens/${encodeURIComponent(pdv)}`, { method: 'DELETE' }),
+  complementos: () => req<{ grupos: GrupoComplemento[] }>('v1/complementos'),
+  statusGrupo: (grupoId: string, status: 'no_ar' | 'pausado') =>
+    req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  editarGrupo: (grupoId: string, dados: { nome: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }) =>
+    req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'PATCH', body: JSON.stringify(dados) }),
+  removerGrupo: (grupoId: string) => req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'DELETE' }),
   criarPizza: (dados: {
     nome: string;
     categoria: string;
@@ -167,7 +185,7 @@ export const api = {
       req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
     remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
-  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }> }) =>
+  editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }> }) =>
     req<{ ok: boolean; erros: string[]; pdv?: string }>(`v1/itens/${encodeURIComponent(pdv)}`, {
       method: 'PATCH',
       body: JSON.stringify(campos),

@@ -8,7 +8,6 @@ import { usePending } from '@/components/pending-changes';
 const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
-  { href: '/precos', label: 'Preços', icon: 'price' },
   { href: '/api-erp', label: 'API & ERP', icon: 'api' },
   { href: '/diagnostico', label: 'Diagnóstico', icon: 'diag' },
 ];

@@ -1,10 +1,10 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
-
-const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { MoneyInput, brl } from '@/components/money';
 
 export default function CardapioPage() {
   const [itens, setItens] = useState<ItemCardapio[] | null>(null);
@@ -14,7 +14,27 @@ export default function CardapioPage() {
   const [modalCat, setModalCat] = useState(false);
   const [novaCat, setNovaCat] = useState('');
   const [criandoCat, setCriandoCat] = useState(false);
+  const [menu, setMenu] = useState<string | null>(null); // pdv com ⋮ aberto
+  const [precoEdit, setPrecoEdit] = useState<{ pdv: string; valor: number } | null>(null);
+  const [salvandoPreco, setSalvandoPreco] = useState(false);
+  const [confirmar, setConfirmar] = useState<ItemCardapio | null>(null); // remover
+  const [removendo, setRemovendo] = useState(false);
+  const [ocupado, setOcupado] = useState<string | null>(null); // pdv em ação (duplicar)
   const toast = useToast();
+  const router = useRouter();
+
+  const carregar = useCallback(async () => {
+    try {
+      const r = await api.cardapio();
+      setItens(r.itens);
+      setErro(null);
+    } catch (e: any) {
+      setErro(e.message);
+    }
+  }, []);
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
 
   async function criarCategoria() {
     const nome = novaCat.trim();
@@ -36,19 +56,6 @@ export default function CardapioPage() {
       setCriandoCat(false);
     }
   }
-
-  const carregar = useCallback(async () => {
-    try {
-      const r = await api.cardapio();
-      setItens(r.itens);
-      setErro(null);
-    } catch (e: any) {
-      setErro(e.message);
-    }
-  }, []);
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
 
   // reflexão instantânea (≤2s): atualiza o estado local na hora; confirma em segundo plano.
   function refletir(pdvs: string[], status: 'no_ar' | 'pausado') {
@@ -91,6 +98,67 @@ export default function CardapioPage() {
     });
   }
 
+  // salva o preço inline (grava no iFood, preservando a promo de/por).
+  async function salvarPreco() {
+    if (!precoEdit) return;
+    const { pdv, valor } = precoEdit;
+    const atual = itens?.find((i) => i.pdv === pdv);
+    if (!atual || Math.abs(valor - atual.preco) < 0.005) {
+      setPrecoEdit(null);
+      return;
+    }
+    setSalvandoPreco(true);
+    try {
+      await api.reprecos([{ pdv, preco: valor }]);
+      setItens((l) => l?.map((i) => (i.pdv === pdv ? { ...i, preco: valor } : i)) ?? null);
+      toast(`<b style="color:var(--green)">${atual.nome}</b> → R$ ${brl(valor)} ✓`);
+      setPrecoEdit(null);
+    } catch (e: any) {
+      toast(`Erro ao atualizar preço: ${e.message}`);
+    } finally {
+      setSalvandoPreco(false);
+    }
+  }
+
+  async function duplicar(it: ItemCardapio) {
+    if (!it.pdv) return;
+    setMenu(null);
+    setOcupado(it.pdv);
+    try {
+      const r = await api.duplicar(it.pdv);
+      if (r.ok) {
+        toast(`<b style="color:var(--green)">${it.nome}</b> duplicado (cópia) ✓`);
+        carregar();
+      } else {
+        toast(`Erro ao duplicar: ${r.erro}`);
+      }
+    } catch (e: any) {
+      toast(`Erro ao duplicar: ${e.message}`);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function remover() {
+    if (!confirmar?.pdv) return;
+    const it = confirmar;
+    setRemovendo(true);
+    try {
+      const r = await api.remover(it.pdv!);
+      if (r.ok) {
+        setItens((l) => l?.filter((i) => i.pdv !== it.pdv) ?? null);
+        toast(`<b style="color:var(--green)">${it.nome}</b> removido do cardápio ✓`);
+        setConfirmar(null);
+      } else {
+        toast(`Erro ao remover: ${r.erro}`);
+      }
+    } catch (e: any) {
+      toast(`Erro ao remover: ${e.message}`);
+    } finally {
+      setRemovendo(false);
+    }
+  }
+
   const lista = (itens ?? []).filter((i) =>
     (i.nome + ' ' + (i.pdv ?? '') + ' ' + i.categoria).toLowerCase().includes(busca.toLowerCase()),
   );
@@ -103,15 +171,18 @@ export default function CardapioPage() {
           <h1>
             Card<span>ápio</span>
           </h1>
-          <div className="sub">O cardápio do seu iFood — pause, reative (em massa) e acompanhe.</div>
+          <div className="sub">Seu cardápio do iFood — pause, altere preço, duplique, remova e edite tudo aqui.</div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             placeholder="Buscar item ou PDV…"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '11px 14px', minWidth: 200 }}
+            style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '11px 14px', minWidth: 180 }}
           />
+          <Link href="/complementos" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
+            Complementos
+          </Link>
           <Link href="/item/novo" className="btn" style={{ whiteSpace: 'nowrap' }}>
             + Novo item
           </Link>
@@ -134,7 +205,7 @@ export default function CardapioPage() {
         >
           <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 100%)' }}>
             <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Nova categoria</h2>
-            <div className="sub" style={{ marginBottom: 14 }}>Cria uma categoria no seu cardápio do iFood (POST /categories).</div>
+            <div className="sub" style={{ marginBottom: 14 }}>Cria uma categoria no seu cardápio do iFood.</div>
             <input
               autoFocus
               value={novaCat}
@@ -148,6 +219,24 @@ export default function CardapioPage() {
               <button className="btn ghost mini" disabled={criandoCat} onClick={() => setModalCat(false)}>Cancelar</button>
               <button className="btn" disabled={criandoCat || !novaCat.trim()} onClick={criarCategoria}>
                 {criandoCat ? 'Criando…' : 'Criar categoria'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* confirmação de remoção */}
+      {confirmar && (
+        <div onClick={() => !removendo && setConfirmar(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 55, padding: 16 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(440px, 100%)' }}>
+            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Remover item?</h2>
+            <div className="sub" style={{ marginBottom: 16 }}>
+              <b>{confirmar.nome}</b> será apagado do cardápio do iFood. Esta ação não pode ser desfeita.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn ghost mini" disabled={removendo} onClick={() => setConfirmar(null)}>Cancelar</button>
+              <button className="btn mini" style={{ background: 'var(--coral, #e5533d)', borderColor: 'transparent' }} disabled={removendo} onClick={remover}>
+                {removendo ? 'Removendo…' : 'Remover item'}
               </button>
             </div>
           </div>
@@ -172,50 +261,120 @@ export default function CardapioPage() {
       {categorias.map((cat) => (
         <div key={cat} style={{ marginBottom: 22 }}>
           <div className="mono" style={{ color: 'var(--dim)', marginBottom: 10 }}>{cat}</div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="card" style={{ padding: 0, overflow: 'visible' }}>
             {lista
               .filter((i) => i.categoria === cat)
-              .map((it) => (
-                <div key={it.pdv ?? it.nome} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid var(--line)', flexWrap: 'wrap', background: it.pdv && sel.has(it.pdv) ? 'rgba(255,162,38,.06)' : undefined }}>
-                  {it.pdv && (
-                    <input type="checkbox" checked={sel.has(it.pdv)} onChange={() => toggleSel(it.pdv!)} aria-label={`Selecionar ${it.nome}`} style={{ width: 16, height: 16, accentColor: 'var(--tanger)', cursor: 'pointer', flex: 'none' }} />
-                  )}
-                  <div style={{ width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flex: 'none', background: 'var(--ink)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {it.imagem ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.imagem} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              .map((it) => {
+                const editando = precoEdit?.pdv === it.pdv;
+                return (
+                  <div key={it.pdv ?? it.nome} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid var(--line)', flexWrap: 'wrap', background: it.pdv && sel.has(it.pdv) ? 'rgba(255,162,38,.06)' : undefined }}>
+                    {it.pdv && (
+                      <input type="checkbox" checked={sel.has(it.pdv)} onChange={() => toggleSel(it.pdv!)} aria-label={`Selecionar ${it.nome}`} style={{ width: 16, height: 16, accentColor: 'var(--tanger)', cursor: 'pointer', flex: 'none' }} />
+                    )}
+                    <div style={{ width: 44, height: 44, borderRadius: 9, overflow: 'hidden', flex: 'none', background: 'var(--ink)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {it.imagem ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.imagem} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span className="mono" style={{ fontSize: '.5rem', color: 'var(--dim)' }}>—</span>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 150 }}>
+                      {it.pdv ? (
+                        <Link href={`/item/${encodeURIComponent(it.pdv)}`} style={{ fontWeight: 600, borderBottom: '1px solid transparent' }} className="itemlink">
+                          {it.nome}
+                        </Link>
+                      ) : (
+                        <div style={{ fontWeight: 600 }}>{it.nome}</div>
+                      )}
+                      <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>PDV {it.pdv ?? '—'}</div>
+                    </div>
+
+                    {/* preço — clique para editar inline */}
+                    {editando ? (
+                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <MoneyInput
+                          valor={precoEdit!.valor}
+                          onChange={(v) => setPrecoEdit({ pdv: it.pdv!, valor: v })}
+                          autoFocus
+                          ariaLabel={`Novo preço de ${it.nome}`}
+                          onKeyDown={(e) => { if (e.key === 'Enter') salvarPreco(); if (e.key === 'Escape') setPrecoEdit(null); }}
+                          style={{ width: 108, padding: '8px 10px 8px 28px', border: '1px solid var(--tanger)', color: 'var(--tanger)' }}
+                        />
+                        <button className="btn mini" disabled={salvandoPreco} onClick={salvarPreco}>{salvandoPreco ? '…' : 'ok'}</button>
+                        <button className="btn ghost mini" disabled={salvandoPreco} onClick={() => setPrecoEdit(null)}>×</button>
+                      </span>
                     ) : (
-                      <span className="mono" style={{ fontSize: '.5rem', color: 'var(--dim)' }}>—</span>
+                      <button
+                        className="mono"
+                        onClick={() => it.pdv && setPrecoEdit({ pdv: it.pdv, valor: it.preco })}
+                        disabled={!it.pdv}
+                        title={it.pdv ? 'Alterar preço' : undefined}
+                        style={{ background: 'none', border: 'none', cursor: it.pdv ? 'pointer' : 'default', textTransform: 'none', letterSpacing: '.02em', padding: '4px 6px', borderRadius: 8 }}
+                      >
+                        {it.promo && <span style={{ color: 'var(--dim)', textDecoration: 'line-through', marginRight: 6 }}>R$ {brl(it.promo.de)}</span>}
+                        <span style={{ color: it.promo ? 'var(--tanger)' : 'var(--cream)' }}>R$ {brl(it.preco)}</span>
+                      </button>
+                    )}
+
+                    <span className={`pill ${it.status === 'no_ar' ? 'on' : 'off'}`}>
+                      <span className="dotp" />
+                      {it.status === 'no_ar' ? 'no ar' : 'pausado'}
+                    </span>
+                    {it.pdv && (
+                      <button className="btn ghost mini" onClick={() => alternar(it)}>
+                        {it.status === 'no_ar' ? 'Pausar' : 'Reativar'}
+                      </button>
+                    )}
+
+                    {/* ⋮ menu de opções */}
+                    {it.pdv && (
+                      <div style={{ position: 'relative', flex: 'none' }}>
+                        <button
+                          className="btn ghost mini"
+                          aria-label="Opções"
+                          aria-expanded={menu === it.pdv}
+                          disabled={ocupado === it.pdv}
+                          onClick={() => setMenu((m) => (m === it.pdv ? null : it.pdv!))}
+                          style={{ padding: '6px 10px', fontSize: '1.1rem', lineHeight: 1 }}
+                        >
+                          {ocupado === it.pdv ? '…' : '⋮'}
+                        </button>
+                        {menu === it.pdv && (
+                          <>
+                            <div onClick={() => setMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+                            <div className="card" style={{ position: 'absolute', top: '110%', right: 0, zIndex: 21, padding: 6, minWidth: 168, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <button className="menuopt" onClick={() => { setMenu(null); router.push(`/item/${encodeURIComponent(it.pdv!)}`); }}>Ver / editar</button>
+                              <button className="menuopt" onClick={() => duplicar(it)}>Duplicar item</button>
+                              <button className="menuopt" style={{ color: 'var(--coral, #e5533d)' }} onClick={() => { setMenu(null); setConfirmar(it); }}>Remover item</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div style={{ flex: 1, minWidth: 150 }}>
-                    {it.pdv ? (
-                      <Link href={`/item/${encodeURIComponent(it.pdv)}`} style={{ fontWeight: 600, borderBottom: '1px solid transparent' }} className="itemlink">
-                        {it.nome}
-                      </Link>
-                    ) : (
-                      <div style={{ fontWeight: 600 }}>{it.nome}</div>
-                    )}
-                    <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>PDV {it.pdv ?? '—'}</div>
-                  </div>
-                  <div className="mono" style={{ textTransform: 'none', letterSpacing: '.02em' }}>
-                    {it.promo && <span style={{ color: 'var(--dim)', textDecoration: 'line-through', marginRight: 6 }}>R$ {brl(it.promo.de)}</span>}
-                    <span style={{ color: it.promo ? 'var(--tanger)' : 'var(--cream)' }}>R$ {brl(it.preco)}</span>
-                  </div>
-                  <span className={`pill ${it.status === 'no_ar' ? 'on' : 'off'}`}>
-                    <span className="dotp" />
-                    {it.status === 'no_ar' ? 'no ar' : 'pausado'}
-                  </span>
-                  {it.pdv && (
-                    <button className="btn ghost mini" onClick={() => alternar(it)}>
-                      {it.status === 'no_ar' ? 'Pausar' : 'Reativar'}
-                    </button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
       ))}
+
+      <style jsx>{`
+        .menuopt {
+          text-align: left;
+          background: none;
+          border: none;
+          color: var(--cream);
+          font-family: inherit;
+          font-size: 0.86rem;
+          padding: 9px 11px;
+          border-radius: 8px;
+          cursor: pointer;
+        }
+        .menuopt:hover {
+          background: var(--ink);
+        }
+      `}</style>
     </>
   );
 }

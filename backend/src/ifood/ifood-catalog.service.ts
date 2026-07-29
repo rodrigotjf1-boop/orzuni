@@ -252,6 +252,20 @@ export class IfoodCatalogService {
     return r.status >= 200 && r.status < 300;
   }
 
+  // ---- exclusão ----
+  /**
+   * Apaga um PRODUTO. Provado na Teste C: apagar o produto principal de um item o
+   * REMOVE do cardápio (não há DELETE /items — "no Route matched"). Usado por "remover item".
+   */
+  async deleteProduct(merchantId: string, productId: string): Promise<{ status: number; data: any }> {
+    return this.req('DELETE', `/merchants/${merchantId}/products/${productId}`);
+  }
+
+  /** Apaga um GRUPO de complemento (DELETE /optionGroups/{id}). Existe na Catalog v2. */
+  async deleteOptionGroup(merchantId: string, optionGroupId: string): Promise<{ status: number; data: any }> {
+    return this.req('DELETE', `/merchants/${merchantId}/optionGroups/${optionGroupId}`);
+  }
+
   // ---- imagem ----
   /** Sobe uma imagem (data-URI base64) e devolve o imagePath para usar no produto. */
   async uploadImage(merchantId: string, dataUri: string): Promise<string | null> {
