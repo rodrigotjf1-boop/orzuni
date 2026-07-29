@@ -11,7 +11,7 @@ import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
 import { usePending } from '@/components/pending-changes';
 
 const normCompl = (cs: ItemDetalhe['complementos']): GrupoCompl[] =>
-  cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco, pdv: o.pdv })) }));
+  cs.map((g) => ({ grupo: g.grupo, min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome, preco: o.preco, pdv: o.pdv, imagem: o.imagem || null })) }));
 
 export default function EditorPage() {
   const { pdv } = useParams<{ pdv: string }>();

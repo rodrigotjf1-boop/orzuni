@@ -27,7 +27,7 @@ export interface ItemDetalhe {
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
   imagem: string; // URL da foto atual (imagePath do iFood), '' se não tiver
-  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
+  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string; imagem: string }> }>;
   disponibilidade: Shift[];
 }
 
@@ -184,7 +184,8 @@ export class CatalogoService {
         const prod = flat?.products?.find((p) => p.id === o?.productId);
         // PDV = externalCode da opção; os ORZ-* são gerados pelo app, então mostra vazio
         const codigo = o?.externalCode && !o.externalCode.startsWith('ORZ-') ? o.externalCode : '';
-        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', preco: o?.price?.value ?? 0, pdv: codigo };
+        // a imagem da opção mora no PRODUTO da opção — precisa voltar p/ o editor não apagá-la ao salvar
+        return { nome: prod?.name ?? o?.externalCode ?? oid, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', preco: o?.price?.value ?? 0, pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
       }),
     }));
     return {
@@ -270,24 +271,29 @@ export class CatalogoService {
           const { weight, industrialized, ...resto } = p;
           return resto;
         };
-        const principal = (flat.products ?? []).filter((p) => p.id === flat.item.productId).map(limpar);
-        // a foto no flat vem como URL completa; o PUT quer relativo
-        principal.forEach((p) => { if (p.imagePath) p.imagePath = this.imgRel(p.imagePath); });
-        // aplica nome/descrição/foto novos no produto principal
-        if (mudouProduto && principal[0]) {
-          if (campos.nome !== undefined) principal[0].name = campos.nome.trim();
-          if (campos.descricao !== undefined) principal[0].description = campos.descricao;
-          if (imagePath) principal[0].imagePath = imagePath;
-        }
-        if (mudouPdv) principal.forEach((p) => (p.externalCode = novoPdv)); // relinka o produto ao novo PDV
+        // mantém TODOS os produtos (principal + sub-produtos de complemento/combo/pizza);
+        // aplica nome/descrição/foto/PDV apenas no PRINCIPAL. Descartar os demais quebra
+        // as referências dos grupos/opções ("resources not linked correctly in the payload").
+        let products: any[] = (flat.products ?? []).map(limpar).map((p: any) => {
+          const np = { ...p };
+          if (np.imagePath) np.imagePath = this.imgRel(np.imagePath); // foto vem como URL; PUT quer relativo
+          if (p.id === flat.item.productId) {
+            if (mudouProduto) {
+              if (campos.nome !== undefined) np.name = campos.nome.trim();
+              if (campos.descricao !== undefined) np.description = campos.descricao;
+              if (imagePath) np.imagePath = imagePath;
+            }
+            if (mudouPdv) np.externalCode = novoPdv; // relinka o produto ao novo PDV
+          }
+          return np;
+        });
 
-        // por padrão mantém os complementos atuais; se vieram novos, reconstrói tudo (substitui)
+        // por padrão mantém os complementos atuais; se vieram novos (só DEFAULT), reconstrói
         let optionGroups: any[] = flat.optionGroups ?? [];
         let options: any[] = flat.options ?? [];
-        let products: any[] = principal.length ? principal : (flat.products ?? []).map(limpar);
         if (mudouCompl) {
           const built = await this.montarComplementos(merchantId, campos.complementos);
-          const main = { ...(principal[0] ?? limpar(flat.products?.[0])) };
+          const main = { ...(products.find((p) => p.id === flat.item.productId) ?? products[0]) };
           main.optionGroups = built.optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max }));
           optionGroups = built.optionGroups;
           options = built.options;
