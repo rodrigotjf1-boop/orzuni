@@ -26,7 +26,7 @@ export interface ItemDetalhe {
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
   imagem: string;
-  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string }> }>;
+  complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string; imagem: string }> }>;
   disponibilidade: Shift[];
 }
 
