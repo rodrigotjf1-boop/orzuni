@@ -88,7 +88,7 @@ export default function EditorPage() {
     if (shiftsMudou) campos.shifts = shifts;
     if (imagem) campos.imagem = imagem;
     if (pdvMudou) campos.pdv = pdvNovo.trim();
-    if (complMudou)
+    if (complMudou && (det?.tipo ?? 'DEFAULT') === 'DEFAULT')
       campos.complementos = grupos
         .filter((g) => g.grupo.trim())
         .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }));
@@ -221,12 +221,20 @@ export default function EditorPage() {
           </div>
 
           <div className="card">
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-              <div className="mono" style={{ color: 'var(--dim)' }}>complementos ({grupos.length})</div>
-              {complMudou && <span className="mono" style={{ fontSize: '.55rem', color: 'var(--tanger)' }}>alterado</span>}
-            </div>
-            <ComplementosEditor grupos={grupos} onChange={setGrupos} />
-            <div className="sub" style={{ marginTop: 10, fontSize: '.68rem' }}>Editar aqui substitui os complementos do item ao publicar.</div>
+            {(det?.tipo ?? 'DEFAULT') === 'DEFAULT' ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+                  <div className="mono" style={{ color: 'var(--dim)' }}>complementos ({grupos.length})</div>
+                  {complMudou && <span className="mono" style={{ fontSize: '.55rem', color: 'var(--tanger)' }}>alterado</span>}
+                </div>
+                <ComplementosEditor grupos={grupos} onChange={setGrupos} />
+                <div className="sub" style={{ marginTop: 10, fontSize: '.68rem' }}>Editar aqui substitui os complementos do item ao publicar.</div>
+              </>
+            ) : (
+              <div className="sub" style={{ margin: 0, fontSize: '.72rem' }}>
+                <b>{det?.tipo === 'PIZZA' ? 'Pizza' : 'Combo'}:</b> a estrutura de {det?.tipo === 'PIZZA' ? 'tamanho/massa/borda/sabor' : 'grupos e opções'} é gerenciada na criação — não é editável por aqui (evita corromper o {det?.tipo === 'PIZZA' ? 'formato da pizza' : 'combo'}). Nome, descrição, foto, preço e disponibilidade acima valem normalmente.
+              </div>
+            )}
 
             <div style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 16 }}>
               <div className="mono" style={{ color: 'var(--dim)', marginBottom: 8 }}>disponibilidade</div>

@@ -146,6 +146,8 @@ export interface GrupoCombo {
 }
 export interface DadosCombo {
   nome?: string;
+  descricao?: string;
+  imagem?: string; // data-URI (jpg/png) — foto do combo
   categoria?: string;
   categoriaId?: string;
   pdv?: string;

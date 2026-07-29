@@ -6,6 +6,7 @@ import { api, type Shift, type ItemCardapio } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput, brl } from '@/components/money';
+import { ImageUpload } from '@/components/image-upload';
 import { usePending } from '@/components/pending-changes';
 
 type Tipo = 'ingredientes' | 'especificacao';
@@ -50,6 +51,8 @@ export default function NovoComboPage() {
   const toast = useToast();
   const { registrar, navegar } = usePending();
   const [nome, setNome] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [imagem, setImagem] = useState<string | null>(null);
   const [categoria, setCategoria] = useState('Combos');
   const [pdv, setPdv] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([
@@ -100,6 +103,8 @@ export default function NovoComboPage() {
     try {
       const r = await api.criarCombo({
         nome: nome.trim(),
+        descricao: descricao.trim() || undefined,
+        imagem: imagem || undefined,
         categoria: categoria.trim(),
         pdv: pdv.trim() || undefined,
         modoPreco,
@@ -193,6 +198,14 @@ export default function NovoComboPage() {
             <label style={label}>Categoria</label>
             <input style={box} value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Combos" />
           </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={label}>Descrição <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <textarea style={{ ...box, minHeight: 66, resize: 'vertical' }} value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={1000} placeholder="O que vem no combo…" />
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={label}>Foto do combo <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
+          <ImageUpload value={imagem} onPick={setImagem} />
         </div>
         <div style={{ marginTop: 14 }}>
           <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>

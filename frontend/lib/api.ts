@@ -21,6 +21,7 @@ export interface ItemDetalhe {
   nome: string;
   descricao: string;
   categoria: string;
+  tipo: string; // DEFAULT | PIZZA | COMBO_V2
   preco: number;
   promo: { de: number } | null;
   status: 'no_ar' | 'pausado';
@@ -153,6 +154,8 @@ export const api = {
   }) => req<{ ok: boolean; pdv?: string; erro?: string }>('v1/pizzas', { method: 'POST', body: JSON.stringify(dados) }),
   criarCombo: (dados: {
     nome: string;
+    descricao?: string;
+    imagem?: string;
     categoria: string;
     pdv?: string;
     modoPreco?: 'produtos' | 'combo';
