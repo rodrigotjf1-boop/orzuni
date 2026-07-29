@@ -199,6 +199,13 @@ export default function NovaPizzaPage() {
 
       {erro && <div className="errbox" style={{ marginBottom: 16 }}>{erro}</div>}
 
+      <div className="card" style={{ marginBottom: 16, borderColor: 'rgba(255,162,38,.35)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>🍕</span>
+        <div className="sub" style={{ margin: 0 }}>
+          <b>Pizza fica numa categoria própria.</b> É uma regra do iFood: pizzas não entram em categorias comuns (lanches, bebidas). O Orzuni <b>cria/reaproveita automaticamente</b> a categoria de pizza — você não precisa fazer nada.
+        </div>
+      </div>
+
       <div className="card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>

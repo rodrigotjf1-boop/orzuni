@@ -598,9 +598,28 @@ export class CatalogoService {
   }
 
   /**
+   * Busca um item JÁ cadastrado pelo PDV e devolve o PRODUTO principal (limpo, foto
+   * relativa, sem optionGroups) + o preço atual — para referenciar em uma opção de combo.
+   */
+  private async produtoExistentePorPdv(merchantId: string, pdv: string): Promise<{ product: any; preco: number } | null> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return null;
+    const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
+    const prod = flat?.products?.find((p) => p.id === (ref.item as any).productId) ?? flat?.products?.[0];
+    if (!prod) return null;
+    const { weight, industrialized, optionGroups, ...limpo } = prod as any; // tira grupos p/ não pendurar refs órfãs
+    if (limpo.imagePath) limpo.imagePath = String(limpo.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+    const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
+    const preco = (ctx?.price ?? ref.item.price)?.value ?? 0;
+    return { product: limpo, preco };
+  }
+
+  /**
    * Cria um COMBO (type COMBO_V2): um grupo principal (MAIN) + grupos adicionais
    * (OFFER_UNIT) + customizações de 3º nível (INGREDIENTS/SPECIFICATION) presas ao
-   * produto da opção. Todo produto referenciado entra em products[]. Ver docs/pizza-combo-shape.md.
+   * produto da opção. Uma opção pode CRIAR um produto novo ou REFERENCIAR um item
+   * existente (refPdv). Preço: modo 'produtos' (soma) ou 'combo' (fixo com de/por).
+   * Ver docs/pizza-combo-shape.md.
    */
   async criarCombo(merchantId: string, d: DadosCombo): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
     const erros = [...validarCombo(d), ...validarShifts(d.shifts)];
@@ -615,8 +634,23 @@ export class CatalogoService {
     const itemId = randomUUID();
     const productId = randomUUID();
     const ext = d.pdv?.trim() || 'ORZ-CMB-' + Date.now();
+    const modo = d.modoPreco === 'combo' ? 'combo' : 'produtos';
+
+    // pré-resolve os itens existentes referenciados (refPdv) — 1 leitura por item único
+    const refCache = new Map<string, { product: any; preco: number }>();
+    for (const g of d.grupos ?? [])
+      for (const o of g.opcoes) {
+        const rp = o.refPdv?.trim();
+        if (rp && !refCache.has(rp)) {
+          const ex = await this.produtoExistentePorPdv(merchantId, rp);
+          if (!ex) return { ok: false, erro: `item "${rp}" (opção do combo) não encontrado` };
+          refCache.set(rp, ex);
+        }
+      }
 
     const products: any[] = [];
+    const idsProduto = new Set<string>(); // dedupe (um item referenciado 2x entra 1x só)
+    const pushProduto = (p: any) => { if (!idsProduto.has(p.id)) { idsProduto.add(p.id); products.push(p); } };
     const optionGroups: any[] = [];
     const options: any[] = [];
     const TIPO_3N = { ingredientes: 'INGREDIENTS', especificacao: 'SPECIFICATION' } as const;
@@ -628,9 +662,9 @@ export class CatalogoService {
       const optionIds: string[] = [];
       g.opcoes.forEach((o, oi) => {
         const optId = randomUUID();
-        const prodId = randomUUID();
         optionIds.push(optId);
-        options.push({ id: optId, productId: prodId, status: 'AVAILABLE', index: oi, price: { value: o.preco } });
+        const rp = o.refPdv?.trim();
+        const ex = rp ? refCache.get(rp) : null;
 
         // 3º nível: customizações presas ao PRODUTO da opção
         const gruposCustom: any[] = [];
@@ -642,18 +676,22 @@ export class CatalogoService {
             const coProdId = randomUUID();
             cOptIds.push(coId);
             options.push({ id: coId, productId: coProdId, status: 'AVAILABLE', price: { value: co.preco ?? 0 } });
-            products.push({ id: coProdId, name: co.nome.trim(), externalCode: 'ORZ-CP-' + coProdId.slice(0, 8) });
+            pushProduto({ id: coProdId, name: co.nome!.trim(), externalCode: 'ORZ-CP-' + coProdId.slice(0, 8) });
           });
           optionGroups.push({ id: cgId, name: c.nome.trim(), status: 'AVAILABLE', optionGroupType: TIPO_3N[c.tipo], optionIds: cOptIds });
           gruposCustom.push({ id: cgId, min: c.min, max: c.max, index: ci });
         });
 
-        products.push({
-          id: prodId,
-          name: o.nome.trim(),
-          externalCode: 'ORZ-CO-' + prodId.slice(0, 8),
-          ...(gruposCustom.length ? { optionGroups: gruposCustom } : {}),
-        });
+        // produto da opção: existente (referência) ou novo
+        const prodId = ex ? ex.product.id : randomUUID();
+        // modo 'combo': preço fica no ITEM (fixo), opções a 0; modo 'produtos': soma dos escolhidos
+        const precoOpcao = modo === 'combo' ? 0 : ex ? ex.preco : o.preco ?? 0;
+        options.push({ id: optId, productId: prodId, status: 'AVAILABLE', index: oi, price: { value: precoOpcao } });
+        pushProduto(
+          ex
+            ? { ...ex.product, ...(gruposCustom.length ? { optionGroups: gruposCustom } : {}) }
+            : { id: prodId, name: o.nome!.trim(), externalCode: 'ORZ-CO-' + prodId.slice(0, 8), ...(gruposCustom.length ? { optionGroups: gruposCustom } : {}) },
+        );
       });
       optionGroups.push({ id: groupId, name: g.nome.trim(), status: 'AVAILABLE', optionGroupType: 'OFFER_UNIT', optionIds });
       gruposPrincipais.push({ id: groupId, min: g.min, max: g.max, index: gi, ...(g.principal ? { associationType: 'MAIN' } : {}) });
@@ -661,6 +699,12 @@ export class CatalogoService {
 
     // produto principal do combo referencia os grupos de nível 2
     products.unshift({ id: productId, name: d.nome!.trim(), externalCode: ext, optionGroups: gruposPrincipais });
+
+    // preço do combo: fixo (de/por) no modo 'combo'; senão soma das opções (item a 0)
+    const precoItem =
+      modo === 'combo'
+        ? { value: Math.round(d.precoTotal! * (1 - (d.descontoPct ?? 0) / 100) * 100) / 100, originalValue: d.precoTotal! }
+        : { value: 0 };
 
     const shifts = toIfoodShifts(d.shifts);
     const payload = {
@@ -672,6 +716,7 @@ export class CatalogoService {
         status: 'AVAILABLE',
         externalCode: ext,
         index: 1,
+        price: precoItem,
         ...(shifts ? { shifts } : {}),
       },
       products,

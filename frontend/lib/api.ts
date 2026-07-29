@@ -155,14 +155,18 @@ export const api = {
     nome: string;
     categoria: string;
     pdv?: string;
+    modoPreco?: 'produtos' | 'combo';
+    precoTotal?: number;
+    descontoPct?: number;
     grupos: Array<{
       nome: string;
       principal?: boolean;
       min: number;
       max: number;
       opcoes: Array<{
-        nome: string;
-        preco: number;
+        nome?: string;
+        preco?: number;
+        refPdv?: string; // PDV de um item já cadastrado (referencia o produto existente)
         customizacoes?: Array<{ nome: string; tipo: 'ingredientes' | 'especificacao'; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
       }>;
     }>;
