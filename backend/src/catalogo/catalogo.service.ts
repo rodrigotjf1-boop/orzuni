@@ -207,7 +207,7 @@ export class CatalogoService {
       shifts?: Shift[];
       imagem?: string;
       pdv?: string;
-      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
+      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
     },
   ): Promise<{ ok: boolean; erros: string[]; pdv?: string }> {
     const ref = await this.resolver(merchantId, pdv);
@@ -266,7 +266,7 @@ export class CatalogoService {
         let options: any[] = flat.options ?? [];
         let products: any[] = principal.length ? principal : (flat.products ?? []).map(limpar);
         if (mudouCompl) {
-          const built = this.montarComplementos(campos.complementos);
+          const built = await this.montarComplementos(merchantId, campos.complementos);
           const main = { ...(principal[0] ?? limpar(flat.products?.[0])) };
           main.optionGroups = built.optionGroups.map((g) => ({ id: g.id, min: g.min, max: g.max }));
           optionGroups = built.optionGroups;
@@ -346,15 +346,24 @@ export class CatalogoService {
     return { ok: true, categoryId: nova.categoryId };
   }
 
-  /** Monta grupos/opções/produtos de complemento a partir do modelo canônico. */
-  private montarComplementos(
-    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>,
+  /**
+   * Monta grupos/opções/produtos de complemento a partir do modelo canônico.
+   * Se a opção trouxer `imagem` (data-URI, já redimensionada no cliente), sobe ao
+   * iFood e usa o imagePath no produto da opção. `groupIds` (opcional) fixa o id de
+   * cada grupo — usado ao EDITAR um grupo existente (preserva a identidade do grupo).
+   */
+  private async montarComplementos(
+    merchantId: string,
+    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>,
+    groupIds?: string[],
   ) {
     const optionGroups: any[] = [];
     const options: any[] = [];
     const optionProducts: any[] = [];
+    let gi = 0;
     for (const g of complementos ?? []) {
-      const groupId = randomUUID();
+      const groupId = groupIds?.[gi] ?? randomUUID();
+      gi++;
       const optIds: string[] = [];
       for (const o of g.opcoes) {
         const optId = randomUUID();
@@ -362,8 +371,19 @@ export class CatalogoService {
         optIds.push(optId);
         // código PDV da opção (integração Regem/iFood); vazio = gera um ORZ-* automático
         const ext = o.pdv?.trim() || 'ORZ-OPT-' + optId.slice(0, 8);
+        // imagem da opção (opcional): data-URI (nova, já redimensionada no cliente) → sobe;
+        // URL/caminho (imagem já existente, ao editar grupo) → preserva como relativo.
+        let imagePath: string | undefined;
+        if (o.imagem) {
+          if (o.imagem.startsWith('data:')) {
+            const up = await this.ifood.uploadImage(merchantId, o.imagem);
+            imagePath = up ? up.replace(/^https?:\/\/[^/]+\//, '') : undefined;
+          } else {
+            imagePath = o.imagem.replace(/^https?:\/\/[^/]+\//, '');
+          }
+        }
         options.push({ id: optId, status: 'AVAILABLE', productId: optProdId, price: { value: o.preco ?? 0 }, externalCode: ext });
-        optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8) });
+        optionProducts.push({ id: optProdId, name: o.nome.trim(), externalCode: 'ORZ-OPP-' + optProdId.slice(0, 8), ...(imagePath ? { imagePath } : {}) });
       }
       optionGroups.push({
         id: groupId,
@@ -400,7 +420,7 @@ export class CatalogoService {
     const ext = d.pdv?.trim() || 'ORZ-' + Date.now();
 
     // monta complementos (grupos + opções); cada opção é um produto próprio
-    const { optionGroups, options, optionProducts } = this.montarComplementos(d.complementos);
+    const { optionGroups, options, optionProducts } = await this.montarComplementos(merchantId, d.complementos);
 
     // foto (opcional): sobe o data-URI ao iFood e usa o imagePath no produto principal
     let imagePath: string | undefined;
@@ -666,16 +686,271 @@ export class CatalogoService {
     return { ok: false, erro: e.mensagem };
   }
 
+  /**
+   * Duplica um item: lê o flat, gera ids/PDVs NOVOS para tudo (item, produtos,
+   * grupos, opções) e reenvia (PUT /items) como um item independente "(cópia)".
+   * Serve para DEFAULT, PIZZA e COMBO. Retorna o PDV novo.
+   */
+  async duplicar(merchantId: string, pdv: string): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { ok: false, erro: 'item não encontrado' };
+    const flat = await this.ifood.itemFlat(merchantId, ref.itemId);
+    if (!flat) return { ok: false, erro: 'não consegui carregar o item para duplicar' };
+
+    const limpar = (p: any) => {
+      const { weight, industrialized, ...resto } = p;
+      return resto;
+    };
+    const idMap = new Map<string, string>();
+    const novo = (old: string): string => {
+      if (!idMap.has(old)) idMap.set(old, randomUUID());
+      return idMap.get(old)!;
+    };
+    const tipo = (flat.item as any).type ?? 'DEFAULT';
+    const novoPdv = 'ORZ-CP-' + Date.now();
+    const relImg = (u: any) => (u ? String(u).replace(/^https?:\/\/[^/]+\//, '') : u);
+
+    // produtos: id novo, externalCode fresco, foto relativa; o principal ganha " (cópia)"
+    const products = (flat.products ?? []).map(limpar).map((p: any) => {
+      const np: any = { ...p, id: novo(p.id) };
+      if (np.imagePath) np.imagePath = relImg(np.imagePath);
+      if (p.id === flat.item.productId) {
+        np.externalCode = novoPdv;
+        np.name = (p.name ?? '') + ' (cópia)';
+      } else {
+        np.externalCode = 'ORZ-DUP-' + np.id.slice(0, 8);
+      }
+      if (Array.isArray(p.optionGroups)) np.optionGroups = p.optionGroups.map((g: any) => ({ ...g, id: novo(g.id) }));
+      return np;
+    });
+    // grupos: id novo, optionIds remapeados, externalCode fresco
+    const optionGroups = (flat.optionGroups ?? []).map((g: any) => ({
+      ...g,
+      id: novo(g.id),
+      externalCode: 'ORZ-OG-' + novo(g.id).slice(0, 8),
+      optionIds: (g.optionIds ?? []).map((oid: string) => novo(oid)),
+    }));
+    // opções: id/productId remapeados; parentOptionId (pizza) também
+    const options = (flat.options ?? []).map((o: any) => {
+      const no: any = { ...o, id: novo(o.id), productId: novo(o.productId), externalCode: 'ORZ-OP-' + novo(o.id).slice(0, 8) };
+      if (Array.isArray(o.contextModifiers)) no.contextModifiers = o.contextModifiers.map((m: any) => (m.parentOptionId ? { ...m, parentOptionId: novo(m.parentOptionId) } : m));
+      return no;
+    });
+
+    const item: any = {
+      ...flat.item,
+      id: novo(flat.item.id),
+      productId: novo(flat.item.productId),
+      externalCode: novoPdv,
+      status: 'AVAILABLE',
+    };
+    if (Array.isArray(item.contextModifiers)) item.contextModifiers = item.contextModifiers.map((m: any) => ({ ...m, externalCode: novoPdv }));
+    // PIZZA: nunca enviar categoryId (a API gerencia a categoria PIZZA — senão 409)
+    if (tipo === 'PIZZA') delete item.categoryId;
+    else item.categoryId = item.categoryId ?? ref.categoryId;
+
+    const r = await this.ifood.putItem(merchantId, { item, products, optionGroups, options });
+    if (r.status >= 200 && r.status < 300) return { ok: true, pdv: novoPdv };
+    const e = mapErroIfood(r.status, r.data);
+    this.logger.warn(`duplicar ${e.codigo}: ${e.mensagem}`);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Remove um item do cardápio apagando o PRODUTO principal (DELETE /products/{id}).
+   * Provado na Teste C: não há DELETE /items; apagar o produto principal tira o item.
+   */
+  async remover(merchantId: string, pdv: string): Promise<{ ok: boolean; erro?: string }> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { ok: false, erro: 'item não encontrado' };
+    const productId = (ref.item as any).productId;
+    if (!productId) return { ok: false, erro: 'produto principal não encontrado' };
+    const r = await this.ifood.deleteProduct(merchantId, productId);
+    if (r.status >= 200 && r.status < 300) return { ok: true };
+    const e = mapErroIfood(r.status, r.data);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
+   * Mapa dos GRUPOS DE COMPLEMENTO (tipo INGREDIENTS/SPECIFICATION) da loja, com as
+   * opções e os itens onde cada grupo aparece. Varre o flat de cada item (N leituras;
+   * ok para lojas pequenas). Base da aba Complementos e das ações de grupo.
+   */
+  private async mapaGrupos(merchantId: string) {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    const mapa = new Map<string, any>();
+    if (!cat) return mapa;
+    const cats = await this.ifood.categories(merchantId, cat.catalogId);
+    const TIPOS_COMPL = new Set(['INGREDIENTS', 'SPECIFICATION', undefined]);
+    for (const c of cats) {
+      for (const it of c.items ?? []) {
+        const flat = await this.ifood.itemFlat(merchantId, it.id);
+        if (!flat) continue;
+        const itemNome = it.name ?? it.id;
+        const itemPdv = this.pdv(it);
+        const mainProd = flat.products?.find((p) => p.id === (it as any).productId);
+        const refMinMax = new Map(((mainProd as any)?.optionGroups ?? []).map((g: any) => [g.id, { min: g.min, max: g.max }]));
+        for (const g of (flat.optionGroups ?? []) as any[]) {
+          // só grupos de complemento (não SIZE/CRUST/EDGE/TOPPING/OFFER_UNIT)
+          if (!TIPOS_COMPL.has(g.optionGroupType)) continue;
+          if (!mapa.has(g.id)) {
+            mapa.set(g.id, {
+              id: g.id,
+              nome: g.name,
+              tipo: g.optionGroupType ?? 'INGREDIENTS',
+              min: (refMinMax.get(g.id) as any)?.min ?? g.min ?? 0,
+              max: (refMinMax.get(g.id) as any)?.max ?? g.max ?? 0,
+              externalCode: g.externalCode ?? '',
+              optionIds: g.optionIds ?? [],
+              opcoes: (g.optionIds ?? []).map((oid: string) => {
+                const o = flat.options?.find((x) => x.id === oid);
+                const prod = flat.products?.find((p) => p.id === o?.productId);
+                const codigo = o?.externalCode && !o.externalCode.startsWith('ORZ-') ? o.externalCode : '';
+                return { nome: (prod as any)?.name ?? oid, preco: o?.price?.value ?? 0, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
+              }),
+              itens: [] as Array<{ nome: string; pdv: string | null }>,
+              itemIds: [] as string[],
+            });
+          }
+          const entry = mapa.get(g.id);
+          if (!entry.itens.some((x: any) => x.nome === itemNome && x.pdv === itemPdv)) entry.itens.push({ nome: itemNome, pdv: itemPdv });
+          if (!entry.itemIds.includes(it.id)) entry.itemIds.push(it.id);
+        }
+      }
+    }
+    return mapa;
+  }
+
+  /** Lista pública dos grupos de complemento (sem ids internos de item). */
+  async complementos(merchantId: string) {
+    const mapa = await this.mapaGrupos(merchantId);
+    return [...mapa.values()].map((g) => ({
+      id: g.id,
+      nome: g.nome,
+      tipo: g.tipo,
+      min: g.min,
+      max: g.max,
+      opcoes: g.opcoes,
+      itens: g.itens,
+    }));
+  }
+
+  /** Pausa/reativa um grupo = aplica o status a TODAS as opções do grupo. */
+  async statusGrupo(merchantId: string, grupoId: string, status: 'no_ar' | 'pausado'): Promise<{ ok: boolean; erro?: string }> {
+    const mapa = await this.mapaGrupos(merchantId);
+    const g = mapa.get(grupoId);
+    if (!g) return { ok: false, erro: 'grupo não encontrado' };
+    const alvo = status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE';
+    let falhas = 0;
+    for (const oid of g.optionIds as string[]) {
+      const ok = await this.ifood.setOptionStatus(merchantId, oid, alvo);
+      if (!ok) falhas++;
+    }
+    if (falhas) return { ok: false, erro: `${falhas} opção(ões) não atualizaram` };
+    return { ok: true };
+  }
+
+  /**
+   * Remove um grupo de complemento: desanexa de cada item que o usa (re-PUT do item
+   * sem o grupo) e depois apaga o grupo (DELETE /optionGroups). Best-effort no delete.
+   */
+  async removerGrupo(merchantId: string, grupoId: string): Promise<{ ok: boolean; erro?: string }> {
+    const mapa = await this.mapaGrupos(merchantId);
+    const g = mapa.get(grupoId);
+    if (!g) return { ok: false, erro: 'grupo não encontrado' };
+    const limpar = (p: any) => {
+      const { weight, industrialized, ...resto } = p;
+      return resto;
+    };
+    for (const itemId of g.itemIds as string[]) {
+      const flat = await this.ifood.itemFlat(merchantId, itemId);
+      if (!flat) continue;
+      const optDoGrupo = new Set<string>(((flat.optionGroups ?? []).find((x: any) => x.id === grupoId)?.optionIds ?? []) as string[]);
+      const optionGroups = (flat.optionGroups ?? []).filter((x: any) => x.id !== grupoId);
+      const options = (flat.options ?? []).filter((o: any) => !optDoGrupo.has(o.id));
+      const prodOpcoes = new Set((flat.options ?? []).filter((o: any) => optDoGrupo.has(o.id)).map((o: any) => o.productId));
+      const products = (flat.products ?? [])
+        .filter((p: any) => !prodOpcoes.has(p.id))
+        .map(limpar)
+        .map((p: any) => {
+          const np = { ...p };
+          if (np.imagePath) np.imagePath = String(np.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+          if (Array.isArray(np.optionGroups)) np.optionGroups = np.optionGroups.filter((r: any) => r.id !== grupoId);
+          return np;
+        });
+      const r = await this.ifood.putItem(merchantId, { item: flat.item, products, optionGroups, options });
+      if (!(r.status >= 200 && r.status < 300)) {
+        const e = mapErroIfood(r.status, r.data);
+        return { ok: false, erro: `${(flat.item as any).name ?? itemId}: ${e.mensagem}` };
+      }
+    }
+    // grupo órfão: tenta apagar (best-effort; se falhar, já saiu de todos os itens)
+    await this.ifood.deleteOptionGroup(merchantId, grupoId).catch(() => null);
+    return { ok: true };
+  }
+
+  /**
+   * Edita um grupo de complemento (nome/min/max/opções) em TODOS os itens que o usam,
+   * preservando o id do grupo. Reconstrói as opções (ids novos) e re-PUT de cada item.
+   */
+  async editarGrupo(
+    merchantId: string,
+    grupoId: string,
+    dados: { nome: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> },
+  ): Promise<{ ok: boolean; erro?: string }> {
+    const mapa = await this.mapaGrupos(merchantId);
+    const g = mapa.get(grupoId);
+    if (!g) return { ok: false, erro: 'grupo não encontrado' };
+    if (!dados.nome?.trim()) return { ok: false, erro: 'nome do grupo é obrigatório' };
+    if (!dados.opcoes?.length) return { ok: false, erro: 'o grupo precisa de ao menos uma opção' };
+
+    const limpar = (p: any) => {
+      const { weight, industrialized, ...resto } = p;
+      return resto;
+    };
+    for (const itemId of g.itemIds as string[]) {
+      const flat = await this.ifood.itemFlat(merchantId, itemId);
+      if (!flat) continue;
+      // reconstrói o grupo (mesmo id) com as opções novas — sobe imagens se houver
+      const built = await this.montarComplementos(merchantId, [{ grupo: dados.nome, min: dados.min, max: dados.max, opcoes: dados.opcoes }], [grupoId]);
+      const novoGrupo = built.optionGroups[0];
+
+      const optAntigas = new Set<string>(((flat.optionGroups ?? []).find((x: any) => x.id === grupoId)?.optionIds ?? []) as string[]);
+      const prodAntigos = new Set((flat.options ?? []).filter((o: any) => optAntigas.has(o.id)).map((o: any) => o.productId));
+
+      const optionGroups = (flat.optionGroups ?? []).map((x: any) => (x.id === grupoId ? novoGrupo : x));
+      const options = [...(flat.options ?? []).filter((o: any) => !optAntigas.has(o.id)), ...built.options];
+      const products = [
+        ...(flat.products ?? [])
+          .filter((p: any) => !prodAntigos.has(p.id))
+          .map(limpar)
+          .map((p: any) => {
+            const np = { ...p };
+            if (np.imagePath) np.imagePath = String(np.imagePath).replace(/^https?:\/\/[^/]+\//, '');
+            if (Array.isArray(np.optionGroups)) np.optionGroups = np.optionGroups.map((r: any) => (r.id === grupoId ? { id: grupoId, min: dados.min, max: dados.max } : r));
+            return np;
+          }),
+        ...built.optionProducts,
+      ];
+      const r = await this.ifood.putItem(merchantId, { item: flat.item, products, optionGroups, options });
+      if (!(r.status >= 200 && r.status < 300)) {
+        const e = mapErroIfood(r.status, r.data);
+        return { ok: false, erro: `${(flat.item as any).name ?? itemId}: ${e.mensagem}` };
+      }
+    }
+    return { ok: true };
+  }
+
   // resolve o PDV → item (itemId, productId, categoria) varrendo o catálogo
   private async resolver(
     merchantId: string,
     pdv: string,
-  ): Promise<{ itemId: string; item: IfoodItem; nome: string; categoria: string } | null> {
+  ): Promise<{ itemId: string; item: IfoodItem; nome: string; categoria: string; categoryId: string } | null> {
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return null;
     const cats = await this.ifood.categories(merchantId, cat.catalogId);
     for (const c of cats)
-      for (const it of c.items ?? []) if (this.pdv(it) === pdv) return { itemId: it.id, item: it, nome: it.name ?? it.id, categoria: c.name };
+      for (const it of c.items ?? []) if (this.pdv(it) === pdv) return { itemId: it.id, item: it, nome: it.name ?? it.id, categoria: c.name, categoryId: c.id };
     return null;
   }
 

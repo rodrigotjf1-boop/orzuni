@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 const ALVO = 1_400_000; // ~1 MB de payload base64 (o iFood aceita bem abaixo do que quebra)
 
 /** Redimensiona + comprime (JPEG) reduzindo dimensão/qualidade até caber; devolve o data-URI. */
-function processar(file: File): Promise<string> {
+export function processar(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -120,6 +120,53 @@ export function ImageUpload({ value, onPick }: { value?: string | null; onPick: 
         </div>
       </div>
       {erro && <div className="sub" style={{ marginTop: 8, color: 'var(--coral)' }}>{erro}</div>}
+    </div>
+  );
+}
+
+/**
+ * Seletor de imagem COMPACTO (quadradinho) para linhas densas — ex.: opção de
+ * complemento. Mesmos limites (JPG/PNG) e o MESMO resize no cliente (evita o 500
+ * do iFood com fotos pesadas). Clique = escolher; clique com foto = trocar.
+ */
+export function ImagemMini({ value, onPick, titulo = 'Foto da opção' }: { value?: string | null; onPick: (dataUri: string | null) => void; titulo?: string }) {
+  const [proc, setProc] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  async function handle(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!['image/jpeg', 'image/jpg', 'image/png'].includes(f.type)) return;
+    setProc(true);
+    try {
+      onPick(await processar(f));
+    } catch {
+      /* ignora — mantém a foto atual */
+    } finally {
+      setProc(false);
+      if (ref.current) ref.current.value = '';
+    }
+  }
+  return (
+    <div style={{ position: 'relative', flex: 'none' }}>
+      <input ref={ref} type="file" accept="image/jpeg,image/png" onChange={handle} style={{ display: 'none' }} />
+      <button
+        type="button"
+        title={value ? 'Trocar foto' : titulo}
+        onClick={() => ref.current?.click()}
+        style={{ width: 38, height: 38, borderRadius: 9, border: '1px dashed var(--line)', background: value ? 'transparent' : 'var(--ink)', overflow: 'hidden', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span className="mono" style={{ fontSize: '.5rem', color: 'var(--dim)' }}>{proc ? '…' : 'foto'}</span>
+        )}
+      </button>
+      {value && (
+        <button type="button" title="Remover foto" onClick={() => onPick(null)} aria-label="Remover foto" style={{ position: 'absolute', top: -6, right: -6, width: 16, height: 16, borderRadius: 8, border: 'none', background: 'var(--coral, #e5533d)', color: '#fff', fontSize: '.6rem', lineHeight: '16px', cursor: 'pointer', padding: 0 }}>
+          ×
+        </button>
+      )}
     </div>
   );
 }

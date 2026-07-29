@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
@@ -91,10 +91,51 @@ export class CatalogoController {
       shifts?: Shift[];
       imagem?: string;
       pdv?: string;
-      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string }> }>;
+      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
     },
   ) {
     return this.catalogo.editar(await this.merchant(req, loja), pdv, body);
+  }
+
+  /** POST /v1/itens/:pdv/duplicar — cria uma cópia independente do item ("(cópia)"). */
+  @Post('itens/:pdv/duplicar')
+  async duplicar(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
+    return this.catalogo.duplicar(await this.merchant(req, loja), pdv);
+  }
+
+  /** DELETE /v1/itens/:pdv — remove o item do cardápio (apaga o produto principal). */
+  @Delete('itens/:pdv')
+  async remover(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
+    return this.catalogo.remover(await this.merchant(req, loja), pdv);
+  }
+
+  /** GET /v1/complementos — grupos de complemento (INGREDIENTS) + itens onde aparecem. */
+  @Get('complementos')
+  async complementos(@Req() req: any, @Query('loja') loja?: string) {
+    return { grupos: await this.catalogo.complementos(await this.merchant(req, loja)) };
+  }
+
+  /** PATCH /v1/complementos/:grupoId/status — pausa/reativa o grupo inteiro. */
+  @Patch('complementos/:grupoId/status')
+  async statusGrupo(@Req() req: any, @Param('grupoId') grupoId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
+    return this.catalogo.statusGrupo(await this.merchant(req, loja), grupoId, body.status);
+  }
+
+  /** PATCH /v1/complementos/:grupoId — edita nome/min/max/opções do grupo em todos os itens. */
+  @Patch('complementos/:grupoId')
+  async editarGrupo(
+    @Req() req: any,
+    @Param('grupoId') grupoId: string,
+    @Query('loja') loja: string | undefined,
+    @Body() body: { nome: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> },
+  ) {
+    return this.catalogo.editarGrupo(await this.merchant(req, loja), grupoId, body);
+  }
+
+  /** DELETE /v1/complementos/:grupoId — remove o grupo (desanexa dos itens + apaga). */
+  @Delete('complementos/:grupoId')
+  async removerGrupo(@Req() req: any, @Param('grupoId') grupoId: string, @Query('loja') loja?: string) {
+    return this.catalogo.removerGrupo(await this.merchant(req, loja), grupoId);
   }
 
   /** POST /v1/categorias — cria uma categoria (valida nome). */

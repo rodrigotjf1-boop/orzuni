@@ -16,6 +16,8 @@ export function MoneyInput({
   style,
   disabled,
   ariaLabel,
+  autoFocus,
+  onKeyDown,
 }: {
   valor: number;
   onChange: (reais: number) => void;
@@ -23,6 +25,8 @@ export function MoneyInput({
   style?: CSSProperties;
   disabled?: boolean;
   ariaLabel?: string;
+  autoFocus?: boolean;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }) {
   const display = valor ? brl(valor) : '';
   function handle(e: React.ChangeEvent<HTMLInputElement>) {
@@ -50,6 +54,8 @@ export function MoneyInput({
         inputMode="numeric"
         disabled={disabled}
         aria-label={ariaLabel}
+        autoFocus={autoFocus}
+        onKeyDown={onKeyDown}
         value={display}
         onChange={handle}
         placeholder={placeholder}
