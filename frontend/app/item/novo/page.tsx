@@ -7,14 +7,8 @@ import { useToast } from '@/components/toast';
 import { ShiftsEditor } from '@/components/shifts';
 import { MoneyInput } from '@/components/money';
 import { ImageUpload } from '@/components/image-upload';
+import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
 import { usePending } from '@/components/pending-changes';
-
-interface Grupo {
-  grupo: string;
-  min: number;
-  max: number;
-  opcoes: Array<{ nome: string; preco: number; pdv: string }>;
-}
 
 export default function NovoItemPage() {
   const router = useRouter();
@@ -26,7 +20,7 @@ export default function NovoItemPage() {
   const [categoria, setCategoria] = useState('');
   const [pdv, setPdv] = useState('');
   const [imagem, setImagem] = useState<string | null>(null);
-  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [grupos, setGrupos] = useState<GrupoCompl[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [cats, setCats] = useState<string[]>([]);
   const [erro, setErro] = useState('');
@@ -58,19 +52,6 @@ export default function NovoItemPage() {
   });
   const valido = erros.length === 0;
 
-  function addGrupo() {
-    setGrupos((g) => [...g, { grupo: '', min: 1, max: 1, opcoes: [{ nome: '', preco: 0, pdv: '' }] }]);
-  }
-  function upd(i: number, patch: Partial<Grupo>) {
-    setGrupos((g) => g.map((x, k) => (k === i ? { ...x, ...patch } : x)));
-  }
-  function addOpcao(i: number) {
-    setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: [...x.opcoes, { nome: '', preco: 0, pdv: '' }] } : x)));
-  }
-  function updOpcao(i: number, j: number, patch: Partial<{ nome: string; preco: number; pdv: string }>) {
-    setGrupos((g) => g.map((x, k) => (k === i ? { ...x, opcoes: x.opcoes.map((o, m) => (m === j ? { ...o, ...patch } : o)) } : x)));
-  }
-
   async function salvarInterno(): Promise<boolean> {
     if (!valido) return false;
     setSalvando(true);
@@ -84,7 +65,7 @@ export default function NovoItemPage() {
         pdv: pdv.trim() || undefined,
         imagem: imagem || undefined,
         complementos: grupos.length
-          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined })) }))
+          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }))
           : undefined,
         shifts: shifts.length ? shifts : undefined,
       });
@@ -127,7 +108,6 @@ export default function NovoItemPage() {
 
   const box = { width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.92rem', padding: '11px 13px' } as const;
   const label = { display: 'block', fontFamily: 'var(--font-mono)', fontSize: '.6rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 7 } as const;
-  const num = { width: 70, background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 9, color: 'var(--cream)', fontFamily: 'var(--font-mono)', fontSize: '.85rem', padding: '8px 10px', textAlign: 'center' } as const;
 
   return (
     <>
@@ -178,34 +158,8 @@ export default function NovoItemPage() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: grupos.length ? 14 : 0 }}>
-          <h2 style={{ fontSize: '1.02rem', fontWeight: 700 }}>Complementos</h2>
-          <button className="btn ghost mini" style={{ marginLeft: 'auto' }} onClick={addGrupo}>+ Grupo</button>
-        </div>
-        {grupos.length === 0 && <div className="sub" style={{ margin: '8px 0 0' }}>Nenhum. Ex.: "Ponto da carne" (obrigatório), "Adicionais" (opcional).</div>}
-        {grupos.map((g, i) => (
-          <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--ink2)', padding: 14, marginTop: 12 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input style={{ ...box, flex: 1, minWidth: 160 }} value={g.grupo} onChange={(e) => upd(i, { grupo: e.target.value })} placeholder="Nome do grupo" />
-              <span className="mono" style={{ fontSize: '.58rem', color: 'var(--dim)' }}>mín</span>
-              <input style={num} type="number" min={0} value={g.min} onChange={(e) => upd(i, { min: +e.target.value })} />
-              <span className="mono" style={{ fontSize: '.58rem', color: 'var(--dim)' }}>máx</span>
-              <input style={num} type="number" min={0} value={g.max} onChange={(e) => upd(i, { max: +e.target.value })} />
-              <button className="btn ghost mini" onClick={() => setGrupos((x) => x.filter((_, k) => k !== i))}>remover</button>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              {g.opcoes.map((o, j) => (
-                <div key={j} style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input style={{ ...box, flex: 1, minWidth: 130, padding: '8px 11px' }} value={o.nome} onChange={(e) => updOpcao(i, j, { nome: e.target.value })} placeholder="Opção" />
-                  <input style={{ ...box, width: 108, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: '.78rem' }} value={o.pdv} onChange={(e) => updOpcao(i, j, { pdv: e.target.value })} placeholder="PDV" title="Código PDV da opção (opcional)" />
-                  <MoneyInput valor={o.preco} onChange={(v) => updOpcao(i, j, { preco: v })} style={{ width: 100, fontSize: '.82rem', padding: '8px 8px 8px 28px' }} ariaLabel="Preço da opção" />
-                  {g.opcoes.length > 1 && <button className="btn ghost mini" onClick={() => setGrupos((x) => x.map((y, k) => (k === i ? { ...y, opcoes: y.opcoes.filter((_, m) => m !== j) } : y)))}>×</button>}
-                </div>
-              ))}
-              <button className="btn ghost mini" style={{ marginTop: 8 }} onClick={() => addOpcao(i)}>+ opção</button>
-            </div>
-          </div>
-        ))}
+        <h2 style={{ fontSize: '1.02rem', fontWeight: 700, marginBottom: 12 }}>Complementos</h2>
+        <ComplementosEditor grupos={grupos} onChange={setGrupos} />
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>

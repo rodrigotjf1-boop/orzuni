@@ -232,7 +232,7 @@ export default function ComplementosPage() {
             <div className="sub" style={{ marginBottom: 14 }}>
               As mudanças valem em <b>todos os {editar.itens.length} item(ns)</b> que usam este grupo. Imagens são ajustadas automaticamente.
             </div>
-            <ComplementosEditor grupos={[draft]} onChange={(gs) => setDraft(gs[0] ?? draft)} />
+            <ComplementosEditor grupos={[draft]} onChange={(gs) => setDraft(gs[0] ?? draft)} bloquearGrupos />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn ghost mini" disabled={salvando} onClick={() => { setEditar(null); setDraft(null); }}>Cancelar</button>
               <button className="btn" disabled={salvando} onClick={salvarEditar}>{salvando ? 'Salvando…' : 'Publicar alterações'}</button>
