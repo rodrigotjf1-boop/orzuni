@@ -210,6 +210,17 @@ export class CatalogoService {
   }
 
   /**
+   * TODAS as categorias do cardápio (inclusive VAZIAS) com template e nº de itens.
+   * O seletor de categoria precisa disso — derivar dos itens esconde categorias vazias.
+   */
+  async categorias(merchantId: string): Promise<Array<{ nome: string; template: string; itens: number }>> {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return [];
+    const cats = await this.ifood.categories(merchantId, cat.catalogId);
+    return cats.map((c) => ({ nome: c.name, template: (c as any).template ?? 'DEFAULT', itens: c.items?.length ?? 0 }));
+  }
+
+  /**
    * Edita um item pelo PDV. nome/descrição → PUT /products (assíncrono, com retry);
    * preço → PATCH (preserva promo); status → PATCH. Só toca no que veio no body.
    */
