@@ -266,6 +266,14 @@ export class IfoodCatalogService {
     return this.req('DELETE', `/merchants/${merchantId}/optionGroups/${optionGroupId}`);
   }
 
+  /**
+   * Apaga uma CATEGORIA (DELETE /categories/{id}). Provado na Teste C. Útil para limpar
+   * a categoria órfã que sobra ao remover uma PIZZA (o iFood cria 1 categoria por pizza).
+   */
+  async deleteCategory(merchantId: string, categoryId: string): Promise<{ status: number; data: any }> {
+    return this.req('DELETE', `/merchants/${merchantId}/categories/${categoryId}`);
+  }
+
   // ---- imagem ----
   /** Sobe uma imagem (data-URI base64) e devolve o imagePath para usar no produto. */
   async uploadImage(merchantId: string, dataUri: string): Promise<string | null> {

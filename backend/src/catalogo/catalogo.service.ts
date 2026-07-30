@@ -502,9 +502,21 @@ export class CatalogoService {
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
 
-    // Pizza: NUNCA enviar categoryId — a API gerencia a (única) categoria PIZZA da loja
-    // sozinha. Passar categoryId (mesmo o da categoria PIZZA existente) devolve 409.
-    // Ver docs/pizza-combo-shape.md.
+    // O iFood cria a categoria de pizza com o NOME da pizza (e rejeita categoryId).
+    // Se já existe uma categoria PIZZA com esse nome: se estiver vazia (leftover de uma
+    // pizza removida), limpa; se tiver itens, avisa ANTES de tentar (em vez do 409 cru).
+    const catsPizza = await this.ifood.categories(merchantId, cat.catalogId);
+    const mesmoNome = catsPizza.find((c) => c.template === 'PIZZA' && (c.name ?? '').trim().toLowerCase() === d.nome!.trim().toLowerCase());
+    if (mesmoNome) {
+      if ((mesmoNome.items?.length ?? 0) === 0) {
+        await this.ifood.deleteCategory(merchantId, mesmoNome.id).catch(() => null);
+      } else {
+        return { ok: false, erro: `Já existe uma pizza chamada "${d.nome!.trim()}". Escolha outro nome para a pizza.` };
+      }
+    }
+
+    // Pizza: o iFood gerencia a categoria PIZZA sozinho — NÃO enviar categoryId
+    // (enviar devolve 409 "same id"). Ver docs/pizza-combo-shape.md.
     const itemId = randomUUID();
     const productId = randomUUID();
     const ext = d.pdv?.trim() || 'ORZ-PIZ-' + randomUUID().slice(0, 8);
@@ -848,9 +860,26 @@ export class CatalogoService {
     const productId = (ref.item as any).productId;
     if (!productId) return { ok: false, erro: 'produto principal não encontrado' };
     const r = await this.ifood.deleteProduct(merchantId, productId);
-    if (r.status >= 200 && r.status < 300) return { ok: true };
-    const e = mapErroIfood(r.status, r.data);
-    return { ok: false, erro: e.mensagem };
+    if (!(r.status >= 200 && r.status < 300)) {
+      const e = mapErroIfood(r.status, r.data);
+      return { ok: false, erro: e.mensagem };
+    }
+    // pizza: o iFood cria 1 categoria por pizza e NÃO a remove sozinho. Se a categoria
+    // ficou vazia após tirar a pizza, apaga também (senão vira leftover que bloqueia
+    // recriar uma pizza com o mesmo nome).
+    try {
+      const [c0] = await this.ifood.catalogs(merchantId);
+      if (c0) {
+        const cats = await this.ifood.categories(merchantId, c0.catalogId);
+        const catDele = cats.find((x) => x.id === ref.categoryId);
+        if (catDele && catDele.template === 'PIZZA' && (catDele.items?.length ?? 0) === 0) {
+          await this.ifood.deleteCategory(merchantId, catDele.id).catch(() => null);
+        }
+      }
+    } catch {
+      /* limpeza best-effort */
+    }
+    return { ok: true };
   }
 
   /**

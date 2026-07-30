@@ -219,7 +219,7 @@ export default function NovaPizzaPage() {
         </div>
         <div style={{ marginTop: 14 }}>
           <label style={label}>Código PDV <span style={{ color: 'var(--dim)' }}>(opcional)</span></label>
-          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Ex.: 38520 — vincula ao seu Regem/PDV" />
+          <input style={{ ...box, fontFamily: 'var(--font-mono)' }} value={pdv} onChange={(e) => setPdv(e.target.value)} placeholder="Código PDV" />
         </div>
         <div className="sub" style={{ marginTop: 10, color: 'var(--dim)' }}>A categoria será criada como categoria de <b>pizza</b> (o iFood aceita uma por loja). Código PDV vazio = gerado automático.</div>
       </div>
