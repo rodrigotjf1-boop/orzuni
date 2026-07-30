@@ -28,8 +28,9 @@ export default function NovoItemPage() {
 
   const carregar = useCallback(async () => {
     try {
-      const r = await api.cardapio();
-      setCats([...new Set(r.itens.map((i) => i.categoria))]);
+      // TODAS as categorias (inclusive vazias); item simples não vai em categoria de pizza
+      const r = await api.categorias();
+      setCats(r.categorias.filter((c) => c.template !== 'PIZZA').map((c) => c.nome));
     } catch {
       /* loja vazia — sem categorias ainda */
     }

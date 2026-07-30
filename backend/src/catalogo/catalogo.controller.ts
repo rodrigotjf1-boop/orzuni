@@ -43,6 +43,12 @@ export class CatalogoController {
     return { contextos: await this.catalogo.contextos(await this.merchant(req, loja)) };
   }
 
+  /** GET /v1/categorias — todas as categorias (inclusive vazias) para o seletor. */
+  @Get('categorias')
+  async listarCategorias(@Req() req: any, @Query('loja') loja?: string) {
+    return { categorias: await this.catalogo.categorias(await this.merchant(req, loja)) };
+  }
+
   @Patch('precos')
   async precos(
     @Req() req: any,
