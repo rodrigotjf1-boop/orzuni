@@ -7,6 +7,7 @@ import { StoreModule } from './store/store.module';
 import { ContaModule } from './conta/conta.module';
 import { VigiaModule } from './vigia/vigia.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
+import { LojaModule } from './loja/loja.module';
 import { AuthModule } from './auth/auth.module';
 import { TelemetriaModule } from './telemetria/telemetria.module';
 
@@ -25,6 +26,7 @@ import { TelemetriaModule } from './telemetria/telemetria.module';
     ContaModule,
     VigiaModule,
     CatalogoModule,
+    LojaModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

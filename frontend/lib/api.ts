@@ -64,6 +64,28 @@ export interface GrupoComplemento {
   itens: Array<{ nome: string; pdv: string | null }>;
 }
 
+export interface LojaPainel {
+  detalhe: {
+    id: string;
+    nome: string;
+    razaoSocial?: string;
+    tipo?: string;
+    statusCadastral?: string;
+    endereco: { rua?: string; numero?: string; bairro?: string; cidade?: string; uf?: string; cep?: string } | null;
+    operacoes: string[];
+  } | null;
+  status: {
+    aberta: boolean;
+    estado: string; // OK | WARNING | CLOSED | ERROR
+    titulo: string;
+    canal?: string;
+    operacao?: string;
+    validacoes: Array<{ id: string; estado: string; titulo: string; subtitulo: string }>;
+  } | null;
+}
+export interface Interrupcao { id: string; descricao: string; inicio: string; fim: string }
+export interface TurnoHorario { id?: string; dia: string; inicio: string; duracao: number }
+
 export interface EventoTelemetria {
   ts: string;
   nivel: 'error' | 'warn' | 'info';
@@ -180,6 +202,19 @@ export const api = {
   telemetria: {
     listar: () => req<{ resumo: { total: number; erros: number; ultimo: string | null }; eventos: EventoTelemetria[] }>('v1/telemetria'),
     limpar: () => req<{ ok: boolean; apagados: number }>('v1/telemetria', { method: 'DELETE' }),
+  },
+  loja: {
+    painel: () => req<LojaPainel>('v1/loja'),
+    lojas: (page?: number, size?: number) =>
+      req<{ lojas: Array<{ id: string; nome: string; razaoSocial: string }> }>(`v1/loja/lojas${page || size ? `?page=${page ?? 1}&size=${size ?? 100}` : ''}`),
+    interrupcoes: () => req<{ interrupcoes: Interrupcao[] }>('v1/loja/interrupcoes'),
+    criarInterrupcao: (d: { descricao: string; inicio: string; fim: string }) =>
+      req<{ ok: boolean; id?: string; erro?: string; codigo?: string }>('v1/loja/interrupcoes', { method: 'POST', body: JSON.stringify(d) }),
+    cancelarInterrupcao: (id: string) =>
+      req<{ ok: boolean; erro?: string; codigo?: string }>(`v1/loja/interrupcoes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    horarios: () => req<{ shifts: TurnoHorario[] }>('v1/loja/horarios'),
+    salvarHorarios: (shifts: Array<{ dia: string; inicio: string; duracao: number }>) =>
+      req<{ ok: boolean; erro?: string; codigo?: string }>('v1/loja/horarios', { method: 'PUT', body: JSON.stringify({ shifts }) }),
   },
   detalhe: (pdv: string) => req<ItemDetalhe>(`v1/itens/${encodeURIComponent(pdv)}`),
   chaves: {

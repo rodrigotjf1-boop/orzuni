@@ -37,6 +37,11 @@ export class IfoodAuthService {
     return this.inflight;
   }
 
+  /** Invalida o token em cache — força a próxima getToken() a renovar (usado ao receber 401). */
+  invalidar(): void {
+    this.expiresAt = 0;
+  }
+
   private async renovar(): Promise<string> {
     if (!this.clientId || !this.clientSecret) {
       throw new Error('IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET ausentes no .env');
