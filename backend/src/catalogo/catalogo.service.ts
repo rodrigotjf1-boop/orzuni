@@ -384,6 +384,18 @@ export class CatalogoService {
   }
 
   /**
+   * Se o código de PDV já pertence a um item existente, devolve o NOME dele (senão null).
+   * O iFood faz upsert por externalCode — sem essa checagem, "criar" com PDV repetido
+   * sobrescreveria o item existente silenciosamente (assume a foto nova, etc.).
+   */
+  private async pdvEmUso(merchantId: string, pdv?: string): Promise<string | null> {
+    const p = pdv?.trim();
+    if (!p) return null;
+    const ref = await this.resolver(merchantId, p);
+    return ref ? ref.nome : null;
+  }
+
+  /**
    * Monta grupos/opções/produtos de complemento a partir do modelo canônico.
    * Se a opção trouxer `imagem` (data-URI, já redimensionada no cliente), sobe ao
    * iFood e usa o imagePath no produto da opção. `groupIds` (opcional) fixa o id de
@@ -444,6 +456,8 @@ export class CatalogoService {
   async criarItem(merchantId: string, d: DadosItem): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
     const erros = [...validarItem(d), ...validarShifts(d.shifts)];
     if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const emUso = await this.pdvEmUso(merchantId, d.pdv);
+    if (emUso) return { ok: false, erro: `Já existe um item com o código PDV "${d.pdv!.trim()}" (${emUso}). Use outro código ou edite o item existente.` };
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
 
@@ -510,6 +524,8 @@ export class CatalogoService {
   async criarPizza(merchantId: string, d: DadosPizza): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
     const erros = [...validarPizza(d), ...validarShifts(d.shifts)];
     if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const pdvUso = await this.pdvEmUso(merchantId, d.pdv);
+    if (pdvUso) return { ok: false, erro: `Já existe um item com o código PDV "${d.pdv!.trim()}" (${pdvUso}). Use outro código.` };
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
 
@@ -673,6 +689,8 @@ export class CatalogoService {
   async criarCombo(merchantId: string, d: DadosCombo): Promise<{ ok: boolean; pdv?: string; erro?: string }> {
     const erros = [...validarCombo(d), ...validarShifts(d.shifts)];
     if (erros.length) return { ok: false, erro: erros.join('; ') };
+    const pdvUsoCombo = await this.pdvEmUso(merchantId, d.pdv);
+    if (pdvUsoCombo) return { ok: false, erro: `Já existe um item com o código PDV "${d.pdv!.trim()}" (${pdvUsoCombo}). Use outro código.` };
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
 
