@@ -7,6 +7,7 @@ import { usePending } from '@/components/pending-changes';
 
 const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
+  { href: '/loja', label: 'Loja', icon: 'loja' },
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
   { href: '/api-erp', label: 'API & ERP', icon: 'api' },
   { href: '/diagnostico', label: 'Diagnóstico', icon: 'diag' },
@@ -19,6 +20,12 @@ function Icon({ name }: { name: string }) {
         <circle cx="12" cy="12" r="3" />
         <circle cx="12" cy="12" r="8" opacity=".5" />
         <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2" strokeLinecap="round" />
+      </svg>
+    );
+  if (name === 'loja')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M4 9l1-4h14l1 4M4 9v10h16V9M4 9h16M9 19v-5h6v5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   if (name === 'menu')
