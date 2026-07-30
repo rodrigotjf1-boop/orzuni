@@ -232,7 +232,7 @@ export default function EditorPage() {
               </>
             ) : (
               <div className="sub" style={{ margin: 0, fontSize: '.72rem' }}>
-                <b>{det?.tipo === 'PIZZA' ? 'Pizza' : 'Combo'}:</b> a estrutura de {det?.tipo === 'PIZZA' ? 'tamanho/massa/borda/sabor' : 'grupos e opções'} é gerenciada na criação — não é editável por aqui (evita corromper o {det?.tipo === 'PIZZA' ? 'formato da pizza' : 'combo'}). Nome, descrição, foto, preço e disponibilidade acima valem normalmente.
+                <b>{det?.tipo === 'PIZZA' ? 'Pizza' : 'Combo'}:</b> a edição da estrutura de {det?.tipo === 'PIZZA' ? 'tamanho, massa, borda e sabor' : 'grupos e opções'} chega <b>em breve</b>. Por enquanto, edite nome, descrição, foto, preço e disponibilidade acima — para mudar a estrutura, recrie {det?.tipo === 'PIZZA' ? 'a pizza' : 'o combo'}.
               </div>
             )}
 
