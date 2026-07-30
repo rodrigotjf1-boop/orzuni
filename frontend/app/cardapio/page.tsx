@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, type ItemCardapio } from '@/lib/api';
@@ -17,6 +17,7 @@ export default function CardapioPage() {
   const [menu, setMenu] = useState<string | null>(null); // pdv com ⋮ aberto
   const [precoEdit, setPrecoEdit] = useState<{ pdv: string; valor: number } | null>(null);
   const [salvandoPreco, setSalvandoPreco] = useState(false);
+  const cancelouPreco = useRef(false); // Escape não deve salvar no blur
   const [confirmar, setConfirmar] = useState<ItemCardapio | null>(null); // remover
   const [removendo, setRemovendo] = useState(false);
   const [ocupado, setOcupado] = useState<string | null>(null); // pdv em ação (duplicar)
@@ -290,29 +291,41 @@ export default function CardapioPage() {
                       <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>PDV {it.pdv ?? '—'}</div>
                     </div>
 
-                    {/* preço — clique para editar inline */}
+                    {/* preço — caixa clicável: cinza/neutra fechada, branca ao editar; salva ao sair (blur) ou Enter */}
                     {editando ? (
-                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        <MoneyInput
-                          valor={precoEdit!.valor}
-                          onChange={(v) => setPrecoEdit({ pdv: it.pdv!, valor: v })}
-                          autoFocus
-                          ariaLabel={`Novo preço de ${it.nome}`}
-                          onKeyDown={(e) => { if (e.key === 'Enter') salvarPreco(); if (e.key === 'Escape') setPrecoEdit(null); }}
-                          style={{ width: 108, padding: '8px 10px 8px 28px', border: '1px solid var(--tanger)', color: 'var(--tanger)' }}
-                        />
-                        <button className="btn mini" disabled={salvandoPreco} onClick={salvarPreco}>{salvandoPreco ? '…' : 'ok'}</button>
-                        <button className="btn ghost mini" disabled={salvandoPreco} onClick={() => setPrecoEdit(null)}>×</button>
-                      </span>
+                      <MoneyInput
+                        valor={precoEdit!.valor}
+                        onChange={(v) => setPrecoEdit({ pdv: it.pdv!, valor: v })}
+                        autoFocus
+                        disabled={salvandoPreco}
+                        ariaLabel={`Novo preço de ${it.nome}`}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { cancelouPreco.current = true; (e.target as HTMLInputElement).blur(); } }}
+                        onBlur={() => { if (cancelouPreco.current) { cancelouPreco.current = false; setPrecoEdit(null); } else { salvarPreco(); } }}
+                        style={{ width: 116, padding: '8px 10px 8px 30px', background: 'var(--cream)', border: '1px solid var(--tanger)', color: 'var(--ink)' }}
+                      />
                     ) : (
                       <button
                         className="mono"
                         onClick={() => it.pdv && setPrecoEdit({ pdv: it.pdv, valor: it.preco })}
                         disabled={!it.pdv}
-                        title={it.pdv ? 'Alterar preço' : undefined}
-                        style={{ background: 'none', border: 'none', cursor: it.pdv ? 'pointer' : 'default', textTransform: 'none', letterSpacing: '.02em', padding: '4px 6px', borderRadius: 8 }}
+                        title={it.pdv ? 'Clique para alterar o preço' : undefined}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          width: 116,
+                          justifyContent: 'flex-end',
+                          background: 'var(--ink)',
+                          border: '1px solid var(--line)',
+                          borderRadius: 10,
+                          padding: '8px 11px',
+                          color: 'var(--dim)',
+                          cursor: it.pdv ? 'text' : 'default',
+                          textTransform: 'none',
+                          letterSpacing: '.02em',
+                        }}
                       >
-                        {it.promo && <span style={{ color: 'var(--dim)', textDecoration: 'line-through', marginRight: 6 }}>R$ {brl(it.promo.de)}</span>}
+                        {it.promo && <span style={{ textDecoration: 'line-through', opacity: 0.7, fontSize: '.72rem' }}>{brl(it.promo.de)}</span>}
                         <span style={{ color: it.promo ? 'var(--tanger)' : 'var(--cream)' }}>R$ {brl(it.preco)}</span>
                       </button>
                     )}
