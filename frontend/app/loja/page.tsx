@@ -17,7 +17,8 @@ const toMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); re
 const fromMin = (t: number) => `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 // datetime-local (local) helpers
 const paraInput = (d: Date) => { const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
-const fmtBR = (iso: string) => { try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
+// o iFood devolve a data/hora em UTC, às vezes SEM o 'Z' — normaliza p/ exibir no fuso local
+const fmtBR = (iso: string) => { try { const s = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + 'Z'; return new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
 
 const box = { background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 10, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '9px 12px' } as const;
 const label = { display: 'block', fontFamily: 'var(--font-mono)', fontSize: '.58rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 } as const;
