@@ -21,17 +21,11 @@ export default function VigiaPage() {
   const [alertas, setAlertas] = useState<Alerta[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [lojaAberta, setLojaAberta] = useState<boolean | null>(null); // status real do merchant
+  const [sincronizando, setSincronizando] = useState(false);
   const toast = useToast();
 
-  const carregar = useCallback(async () => {
-    try {
-      const r = await api.alertas();
-      setAlertas(r.alertas);
-      setErro(null);
-    } catch (e: any) {
-      setErro(e.message);
-    }
-    // status real da loja (não bloqueia os alertas se falhar)
+  // status real da loja (não bloqueia os alertas se falhar)
+  const carregarStatus = useCallback(async () => {
     try {
       const p = await api.loja.painel();
       setLojaAberta(p.status?.aberta ?? null);
@@ -40,6 +34,33 @@ export default function VigiaPage() {
     }
   }, []);
 
+  // leitura barata (do banco) — usada no load e no auto-refresh de 30s
+  const carregar = useCallback(async () => {
+    try {
+      const r = await api.alertas();
+      setAlertas(r.alertas);
+      setErro(null);
+    } catch (e: any) {
+      setErro(e.message);
+    }
+    carregarStatus();
+  }, [carregarStatus]);
+
+  // varredura FORÇADA (não espera o poll de 2 min) — sincroniza com o iFood agora
+  const atualizar = useCallback(async () => {
+    setSincronizando(true);
+    try {
+      const r = await api.varrerVigia();
+      setAlertas(r.alertas);
+      setErro(null);
+    } catch (e: any) {
+      setErro(e.message);
+    } finally {
+      setSincronizando(false);
+    }
+    carregarStatus();
+  }, [carregarStatus]);
+
   useEffect(() => {
     carregar();
     const t = setInterval(carregar, 30000);
@@ -47,11 +68,13 @@ export default function VigiaPage() {
   }, [carregar]);
 
   async function reativar(pdv: string, nome: string) {
+    setAlertas((l) => l?.filter((a) => a.pdv !== pdv) ?? null); // some da lista na hora
     try {
       await api.status(pdv, 'no_ar');
       toast(`<b style="color:var(--green)">${nome}</b> reativado — de volta ao ar.`);
-      setTimeout(carregar, 1500);
+      setTimeout(atualizar, 2500); // reconcilia com o iFood após propagar
     } catch (e: any) {
+      carregar(); // reverte (recarrega a lista real)
       toast(`Erro ao reativar: ${e.message}`);
     }
   }
@@ -69,8 +92,8 @@ export default function VigiaPage() {
           </h1>
           <div className="sub">O que o cliente não consegue pedir no seu iFood — e há quanto tempo.</div>
         </div>
-        <button className="btn ghost mini" onClick={carregar}>
-          Atualizar
+        <button className="btn ghost mini" onClick={atualizar} disabled={sincronizando}>
+          {sincronizando ? 'Sincronizando…' : 'Atualizar'}
         </button>
       </div>
 

@@ -26,29 +26,28 @@ export class VigiaPoller {
     this.rodando = true;
     try {
       const contas = await this.contas.ativas();
-      const agora = Date.now();
-      for (const c of contas) {
-        try {
-          const prev = await this.store.getEstado(c.merchantId);
-          const { alertas, estado } = await this.vigia.varrer(c.merchantId, prev, agora);
-          await this.store.setEstado(c.merchantId, estado);
-          await this.store.reconciliarAlertas(
-            c.merchantId,
-            alertas.map((a) => ({
-              itemId: a.itemId,
-              externalCode: a.externalCode,
-              nome: a.nome,
-              motivo: a.motivo,
-              grupoAfetado: a.grupoAfetado,
-              caiuEm: a.desde,
-            })),
-          );
-        } catch (e: any) {
-          this.logger.warn(`varredura ${c.merchantId.slice(0, 8)} falhou: ${e?.message ?? e}`);
-        }
-      }
+      for (const c of contas) await this.varrerLoja(c.merchantId).catch((e: any) => this.logger.warn(`varredura ${c.merchantId.slice(0, 8)} falhou: ${e?.message ?? e}`));
     } finally {
       this.rodando = false;
     }
+  }
+
+  /** Varre UMA loja e reconcilia os alertas (usado no cron e na atualização sob demanda). */
+  async varrerLoja(merchantId: string): Promise<void> {
+    const agora = Date.now();
+    const prev = await this.store.getEstado(merchantId);
+    const { alertas, estado } = await this.vigia.varrer(merchantId, prev, agora);
+    await this.store.setEstado(merchantId, estado);
+    await this.store.reconciliarAlertas(
+      merchantId,
+      alertas.map((a) => ({
+        itemId: a.itemId,
+        externalCode: a.externalCode,
+        nome: a.nome,
+        motivo: a.motivo,
+        grupoAfetado: a.grupoAfetado,
+        caiuEm: a.desde,
+      })),
+    );
   }
 }
