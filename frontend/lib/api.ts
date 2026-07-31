@@ -135,6 +135,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   cardapio: () => req<{ itens: ItemCardapio[] }>('v1/cardapio'),
   alertas: () => req<{ alertas: Alerta[] }>('v1/vigia/alertas'),
+  // força uma varredura AGORA (não espera o poll de 2 min) e devolve os alertas frescos
+  varrerVigia: () => req<{ alertas: Alerta[] }>('v1/vigia/varrer', { method: 'POST' }),
   reprecos: (itens: Array<{ pdv: string; preco: number; manterPromo?: boolean }>, contexto?: string) =>
     req<{ batchId: string | null; ignorados: string[] }>(`v1/precos${contexto ? `?contexto=${encodeURIComponent(contexto)}` : ''}`, {
       method: 'PATCH',
