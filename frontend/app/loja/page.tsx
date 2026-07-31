@@ -90,7 +90,10 @@ export default function LojaPage() {
     try {
       const shifts = turnos.map((t) => ({ dia: t.dia, inicio: `${t.inicio}:00`, duracao: toMin(t.fim) - toMin(t.inicio) }));
       const r = await api.loja.salvarHorarios(shifts);
-      if (r.ok) { toast('<b style="color:var(--green)">Horários salvos</b> ✓'); setTimeout(carregarHorarios, 1500); }
+      // NÃO recarrega da API logo após salvar: o iFood tem atraso de propagação e
+      // pode devolver o valor antigo por alguns segundos, apagando o que foi salvo.
+      // O estado local já reflete exatamente o que foi enviado (é a fonte da verdade).
+      if (r.ok) toast('<b style="color:var(--green)">Horários salvos</b> ✓');
       else toast(`Erro ao salvar: ${r.erro}${r.codigo ? ` (${r.codigo})` : ''}`);
     } catch (e: any) { toast(`Erro: ${e.message}`); } finally { setSavingH(false); }
   }
