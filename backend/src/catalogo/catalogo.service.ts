@@ -235,7 +235,7 @@ export class CatalogoService {
       shifts?: Shift[];
       imagem?: string;
       pdv?: string;
-      complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
+      complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
     },
   ): Promise<{ ok: boolean; erros: string[]; pdv?: string }> {
     const ref = await this.resolver(merchantId, pdv);
@@ -396,6 +396,41 @@ export class CatalogoService {
   }
 
   /**
+   * Definição COMPLETA de um grupo existente (grupo + opções + produtos das opções, com
+   * os ids ATUAIS) para REUSO. Incluir isso num novo item, referenciando o mesmo id de
+   * grupo, faz o item COMPARTILHAR o grupo (provado ao vivo: um grupo em N itens).
+   */
+  private async grupoExistente(merchantId: string, grupoId: string): Promise<{ group: any; options: any[]; optionProducts: any[] } | null> {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return null;
+    const cats = await this.ifood.categories(merchantId, cat.catalogId);
+    const limpar = (p: any) => {
+      const { weight, industrialized, ...resto } = p;
+      return resto;
+    };
+    for (const c of cats) {
+      for (const it of c.items ?? []) {
+        const flat = await this.ifood.itemFlat(merchantId, it.id);
+        const g = (flat?.optionGroups ?? []).find((x: any) => x.id === grupoId);
+        if (g) {
+          const optIds = new Set<string>((g.optionIds ?? []) as string[]);
+          const options = (flat!.options ?? []).filter((o: any) => optIds.has(o.id)).map(limpar);
+          const prodIds = new Set(options.map((o: any) => o.productId));
+          const optionProducts = (flat!.products ?? [])
+            .filter((p: any) => prodIds.has(p.id))
+            .map(limpar)
+            .map((p: any) => {
+              if (p.imagePath) p.imagePath = this.imgRel(p.imagePath);
+              return p;
+            });
+          return { group: limpar(g), options, optionProducts };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Monta grupos/opções/produtos de complemento a partir do modelo canônico.
    * Se a opção trouxer `imagem` (data-URI, já redimensionada no cliente), sobe ao
    * iFood e usa o imagePath no produto da opção. `groupIds` (opcional) fixa o id de
@@ -403,7 +438,7 @@ export class CatalogoService {
    */
   private async montarComplementos(
     merchantId: string,
-    complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>,
+    complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>,
     groupIds?: string[],
   ) {
     const optionGroups: any[] = [];
@@ -411,6 +446,21 @@ export class CatalogoService {
     const optionProducts: any[] = [];
     let gi = 0;
     for (const g of complementos ?? []) {
+      // REUSO: grupo existente (mesmo id) compartilhado entre itens — referencia a
+      // definição atual do grupo (opções/produtos com os ids existentes) em vez de criar novo.
+      if (g.refId?.trim()) {
+        const ex = await this.grupoExistente(merchantId, g.refId.trim());
+        if (ex) {
+          ex.group.min = g.min;
+          ex.group.max = g.max;
+          optionGroups.push(ex.group);
+          options.push(...ex.options);
+          optionProducts.push(...ex.optionProducts);
+          gi++;
+          continue;
+        }
+        // não achou o grupo → cai no fluxo normal (cria um novo com esse nome)
+      }
       const groupId = groupIds?.[gi] ?? randomUUID();
       gi++;
       const optIds: string[] = [];

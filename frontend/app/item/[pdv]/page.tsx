@@ -91,7 +91,7 @@ export default function EditorPage() {
     if (complMudou && (det?.tipo ?? 'DEFAULT') === 'DEFAULT')
       campos.complementos = grupos
         .filter((g) => g.grupo.trim())
-        .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }));
+        .map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, refId: g.refId, opcoes: g.opcoes.filter((o) => o.nome.trim()).map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }));
     try {
       const r = await api.editar(pdv, campos);
       if (r.ok) {

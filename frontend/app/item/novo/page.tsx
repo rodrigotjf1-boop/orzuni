@@ -66,7 +66,7 @@ export default function NovoItemPage() {
         pdv: pdv.trim() || undefined,
         imagem: imagem || undefined,
         complementos: grupos.length
-          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }))
+          ? grupos.map((g) => ({ grupo: g.grupo.trim(), min: g.min, max: g.max, refId: g.refId, opcoes: g.opcoes.map((o) => ({ nome: o.nome.trim(), preco: o.preco, pdv: o.pdv.trim() || undefined, imagem: o.imagem || undefined })) }))
           : undefined,
         shifts: shifts.length ? shifts : undefined,
       });

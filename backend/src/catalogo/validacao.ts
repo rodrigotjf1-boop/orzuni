@@ -18,7 +18,7 @@ export interface DadosItem {
   categoria?: string;
   pdv?: string;
   imagem?: string; // data-URI (jpg/png) — enviado ao upload do iFood
-  complementos?: Array<{ grupo: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
+  complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }>;
   shifts?: Shift[];
 }
 
@@ -75,8 +75,9 @@ export function validarItem(d: DadosItem): string[] {
   if (typeof d.preco !== 'number' || isNaN(d.preco) || d.preco <= 0) e.push('preço deve ser um número positivo');
   if (!d.categoriaId && !d.categoria) e.push('categoria é obrigatória');
   for (const g of d.complementos ?? []) {
-    if (!g.grupo?.trim()) e.push('grupo de complemento sem nome');
     if (g.min < 0 || g.max < g.min) e.push(`grupo "${g.grupo}": min/max inválidos (max deve ser ≥ min)`);
+    if ((g as any).refId) continue; // grupo REUSADO: nome/opções vêm do grupo existente
+    if (!g.grupo?.trim()) e.push('grupo de complemento sem nome');
     if (!g.opcoes?.length) e.push(`grupo "${g.grupo}" precisa de ao menos uma opção`);
     for (const o of g.opcoes ?? []) {
       if (!o.nome?.trim()) e.push(`grupo "${g.grupo}": opção sem nome`);
