@@ -112,6 +112,11 @@ export class LojaService {
     const r = await this.ifood.salvarOpeningHours(merchantId, payload);
     if (r.status === 201 || (r.status >= 200 && r.status < 300)) return { ok: true };
     const e = this.erroIfood(r.data);
-    return { ok: false, erro: e.mensagem, codigo: e.codigo };
+    // 400 (InvalidOpeningHours / bad request) = turnos sobrepostos ou inválidos no mesmo dia
+    const amigavel =
+      e.codigo === 'InvalidOpeningHours' || r.status === 400
+        ? 'Turnos sobrepostos ou inválidos: no mesmo dia, um turno não pode cruzar com outro. Ajuste os horários.'
+        : e.mensagem;
+    return { ok: false, erro: amigavel, codigo: e.codigo || (r.status === 400 ? 'InvalidOpeningHours' : undefined) };
   }
 }

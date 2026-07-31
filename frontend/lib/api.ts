@@ -119,11 +119,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
+    // páginas de erro de gateway vêm em HTML (502/504 durante deploy) — não despejar no log
+    const msg = txt.trim().startsWith('<') || txt.trim().startsWith('<!')
+      ? (res.status >= 500 ? 'servidor indisponível no momento (tente de novo)' : 'requisição inválida')
+      : txt.slice(0, 160);
     // reporta erros HTTP do cliente para a telemetria (fire-and-forget, sem loop)
     if (!path.startsWith('v1/telemetria')) {
-      fetch('/api/orzuni/v1/telemetria', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: path, mensagem: `${res.status}: ${txt.slice(0, 120)}`, status: res.status }) }).catch(() => {});
+      fetch('/api/orzuni/v1/telemetria', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: path, mensagem: `${res.status}: ${msg.slice(0, 120)}`, status: res.status }) }).catch(() => {});
     }
-    throw new Error(`${res.status}: ${txt.slice(0, 160)}`);
+    throw new Error(`${res.status}: ${msg}`);
   }
   return res.json();
 }
