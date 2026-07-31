@@ -20,6 +20,7 @@ function dur(ms: number) {
 export default function VigiaPage() {
   const [alertas, setAlertas] = useState<Alerta[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [lojaAberta, setLojaAberta] = useState<boolean | null>(null); // status real do merchant
   const toast = useToast();
 
   const carregar = useCallback(async () => {
@@ -29,6 +30,13 @@ export default function VigiaPage() {
       setErro(null);
     } catch (e: any) {
       setErro(e.message);
+    }
+    // status real da loja (não bloqueia os alertas se falhar)
+    try {
+      const p = await api.loja.painel();
+      setLojaAberta(p.status?.aberta ?? null);
+    } catch {
+      setLojaAberta(null);
     }
   }, []);
 
@@ -81,10 +89,10 @@ export default function VigiaPage() {
             {maisTempo}
           </div>
         </div>
-        <div className="stat ok">
+        <div className={`stat ${lojaAberta === false ? 'crit' : 'ok'}`}>
           <div className="label mono">status da loja</div>
-          <div className="value" style={{ fontSize: '1.4rem' }}>
-            {erro ? 'erro' : 'online'}
+          <div className="value" style={{ fontSize: '1.4rem', color: lojaAberta === false ? 'var(--coral)' : lojaAberta ? 'var(--green)' : undefined }}>
+            {lojaAberta === null ? (erro ? 'erro' : '—') : lojaAberta ? 'aberta' : 'fechada'}
           </div>
         </div>
       </div>
