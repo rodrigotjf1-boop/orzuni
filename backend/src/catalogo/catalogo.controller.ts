@@ -60,9 +60,16 @@ export class CatalogoController {
     return { batchId: r.batchId, ignorados: r.ignorados };
   }
 
+  /** PATCH /v1/itens/:pdv/status — pausa/reativa UM item (PATCH /items/status por itemId). */
   @Patch('itens/:pdv/status')
   async status(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
-    return this.catalogo.status(await this.merchant(req, loja), pdv, body.status);
+    return this.catalogo.statusItem(await this.merchant(req, loja), pdv, body.status);
+  }
+
+  /** PATCH /v1/itens/:pdv/preco — altera o preço de UM item (PATCH /items/price por itemId). */
+  @Patch('itens/:pdv/preco')
+  async precoItem(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja: string | undefined, @Body() body: { preco: number }) {
+    return this.catalogo.precoItem(await this.merchant(req, loja), pdv, body.preco);
   }
 
   /** PATCH /v1/status — pausa/reativa VÁRIOS itens numa chamada (em massa). */
@@ -125,6 +132,12 @@ export class CatalogoController {
   @Patch('complementos/opcao/:optionId/status')
   async statusOpcao(@Req() req: any, @Param('optionId') optionId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
     return this.catalogo.statusOpcao(await this.merchant(req, loja), optionId, body.status);
+  }
+
+  /** PATCH /v1/complementos/opcao/:optionId/preco — altera o preço de UMA opção (PATCH /options/price). */
+  @Patch('complementos/opcao/:optionId/preco')
+  async precoOpcao(@Req() req: any, @Param('optionId') optionId: string, @Query('loja') loja: string | undefined, @Body() body: { preco: number }) {
+    return this.catalogo.precoOpcao(await this.merchant(req, loja), optionId, body.preco);
   }
 
   /** PATCH /v1/complementos/:grupoId/status — pausa/reativa o grupo inteiro. */

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, type GrupoComplemento } from '@/lib/api';
 import { useToast } from '@/components/toast';
-import { brl } from '@/components/money';
+import { brl, MoneyInput } from '@/components/money';
 import { ComplementosEditor, type GrupoCompl } from '@/components/complementos';
 
 const grupoNoAr = (g: GrupoComplemento) => g.opcoes.length > 0 && g.opcoes.every((o) => o.status === 'no_ar');
@@ -53,6 +53,21 @@ export default function ComplementosPage() {
       toast(`Erro: ${e.message}`);
     } finally {
       setOcupado(null);
+    }
+  }
+
+  // atualiza o preço no estado local (enquanto digita)
+  function setPrecoLocal(grupoId: string, idx: number, valor: number) {
+    setGrupos((l) => l?.map((x) => (x.id === grupoId ? { ...x, opcoes: x.opcoes.map((o, i) => (i === idx ? { ...o, preco: valor } : o)) } : x)) ?? null);
+  }
+  // salva o preço da opção via PATCH /options/price (ao sair do campo)
+  async function salvarPrecoOpcao(optionId: string, valor: number, nome: string) {
+    try {
+      const r = await api.precoOpcao(optionId, valor);
+      if (r.ok) toast(`<b>${nome}</b> → +R$ ${brl(valor)} ✓`);
+      else toast(`Erro no preço: ${r.erro}`);
+    } catch (e: any) {
+      toast(`Erro no preço: ${e.message}`);
     }
   }
 
@@ -191,7 +206,13 @@ export default function ComplementosPage() {
                       <span style={{ flex: 1, minWidth: 0, fontSize: '.85rem', color: pausada ? 'var(--dim)' : 'var(--cream)', textDecoration: pausada ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {o.nome}
                       </span>
-                      {o.preco > 0 && <span className="mono" style={{ color: 'var(--dim)', fontSize: '.64rem' }}>+{brl(o.preco)}</span>}
+                      <MoneyInput
+                        valor={o.preco}
+                        onChange={(v) => setPrecoLocal(g.id, i, v)}
+                        onBlur={() => salvarPrecoOpcao(o.id, o.preco, o.nome)}
+                        ariaLabel={`Preço de ${o.nome}`}
+                        style={{ width: 92, fontSize: '.75rem', padding: '5px 6px 5px 26px', flex: 'none' }}
+                      />
                       <button
                         className="btn ghost mini"
                         onClick={() => alternarOpcao(g, i)}

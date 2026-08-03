@@ -110,7 +110,8 @@ export default function CardapioPage() {
     }
     setSalvandoPreco(true);
     try {
-      await api.reprecos([{ pdv, preco: valor }]);
+      const r = await api.precoItem(pdv, valor); // PATCH /items/price
+      if (!r.ok) throw new Error(r.erro || 'não foi possível');
       setItens((l) => l?.map((i) => (i.pdv === pdv ? { ...i, preco: valor } : i)) ?? null);
       toast(`<b style="color:var(--green)">${atual.nome}</b> → R$ ${brl(valor)} ✓`);
       setPrecoEdit(null);
