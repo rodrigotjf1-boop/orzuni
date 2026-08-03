@@ -21,6 +21,8 @@ export default function CardapioPage() {
   const [confirmar, setConfirmar] = useState<ItemCardapio | null>(null); // remover
   const [removendo, setRemovendo] = useState(false);
   const [ocupado, setOcupado] = useState<string | null>(null); // pdv em ação (duplicar)
+  const [precoMassa, setPrecoMassa] = useState<number | null>(null); // preço em massa (seleção)
+  const [aplicandoMassa, setAplicandoMassa] = useState(false);
   const toast = useToast();
   const router = useRouter();
 
@@ -88,6 +90,24 @@ export default function CardapioPage() {
     } catch (e: any) {
       carregar();
       toast(`Erro na ação em massa: ${e.message}`);
+    }
+  }
+
+  // preço EM MASSA: aplica o mesmo preço aos selecionados numa única chamada (PATCH /products/price)
+  async function aplicarPrecoMassa() {
+    const pdvs = [...sel];
+    if (!pdvs.length || precoMassa == null || precoMassa <= 0) return;
+    setAplicandoMassa(true);
+    try {
+      await api.reprecos(pdvs.map((pdv) => ({ pdv, preco: precoMassa })));
+      setItens((l) => l?.map((i) => (i.pdv && pdvs.includes(i.pdv) ? { ...i, preco: precoMassa } : i)) ?? null);
+      toast(`<b style="color:var(--green)">${pdvs.length} item(ns)</b> → R$ ${brl(precoMassa)} ✓`);
+      setPrecoMassa(null);
+      setSel(new Set());
+    } catch (e: any) {
+      toast(`Erro no preço em massa: ${e.message}`);
+    } finally {
+      setAplicandoMassa(false);
     }
   }
 
@@ -249,7 +269,16 @@ export default function CardapioPage() {
       {sel.size > 0 && (
         <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderColor: 'rgba(255,162,38,.4)' }}>
           <b>{sel.size} selecionado(s)</b>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 9 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
+            {precoMassa == null ? (
+              <button className="btn ghost mini" onClick={() => setPrecoMassa(0)}>Alterar preço…</button>
+            ) : (
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <MoneyInput valor={precoMassa} onChange={setPrecoMassa} autoFocus ariaLabel="Novo preço para os selecionados" style={{ width: 110, padding: '8px 10px 8px 28px' }} />
+                <button className="btn mini" disabled={aplicandoMassa || !precoMassa} onClick={aplicarPrecoMassa}>{aplicandoMassa ? '…' : `Aplicar a ${sel.size}`}</button>
+                <button className="btn ghost mini" disabled={aplicandoMassa} onClick={() => setPrecoMassa(null)}>×</button>
+              </span>
+            )}
             <button className="btn ghost mini" onClick={() => emMassa('pausado')}>Pausar selecionados</button>
             <button className="btn mini" onClick={() => emMassa('no_ar')}>Reativar selecionados</button>
             <button className="btn ghost mini" onClick={() => setSel(new Set())}>Limpar</button>

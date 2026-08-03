@@ -28,6 +28,7 @@ interface Turno { dia: string; inicio: string; fim: string }
 export default function LojaPage() {
   const toast = useToast();
   const [painel, setPainel] = useState<LojaPainel | null>(null);
+  const [lojas, setLojas] = useState<Array<{ id: string; nome: string; razaoSocial: string }> | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [interrupcoes, setInterrupcoes] = useState<Interrupcao[] | null>(null);
   const [turnos, setTurnos] = useState<Turno[] | null>(null);
@@ -56,6 +57,7 @@ export default function LojaPage() {
     carregarPainel();
     carregarInterrupcoes();
     carregarHorarios();
+    api.loja.lojas().then((r) => setLojas(r.lojas)).catch(() => {}); // lojas vinculadas ao app (GET /merchants)
     const now = new Date();
     setPIni(paraInput(now));
     setPFim(paraInput(new Date(now.getTime() + 60 * 60 * 1000)));
@@ -114,6 +116,24 @@ export default function LojaPage() {
 
       {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
       {!painel && !erro && <div className="loading">Carregando…</div>}
+
+      {/* LOJAS VINCULADAS (GET /merchants) */}
+      {lojas && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="mono" style={{ color: 'var(--dim)', marginBottom: 10 }}>lojas vinculadas ao app ({lojas.length})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {lojas.map((l) => (
+              <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ fontWeight: 600 }}>{l.nome}</div>
+                  {l.razaoSocial && l.razaoSocial !== l.nome && <div className="sub" style={{ margin: 0, fontSize: '.72rem' }}>{l.razaoSocial}</div>}
+                </div>
+                <span className="mono" style={{ color: 'var(--dim)', fontSize: '.6rem', textTransform: 'none' }}>{l.id}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* STATUS */}
       {st && (
