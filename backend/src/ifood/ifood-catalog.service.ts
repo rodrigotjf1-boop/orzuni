@@ -169,6 +169,17 @@ export class IfoodCatalogService {
     return r.status >= 200 && r.status < 300;
   }
 
+  /** Altera o preço de um ITEM por itemId (PATCH /items/price, síncrono). Preserva de/por. */
+  async patchItemPrice(merchantId: string, itemId: string, value: number, originalValue?: number): Promise<{ status: number; data: any }> {
+    const price = originalValue && originalValue > value ? { value, originalValue } : { value };
+    return this.req('PATCH', `/merchants/${merchantId}/items/price`, { itemId, price });
+  }
+
+  /** Altera o preço de uma OPÇÃO (complemento) por optionId (PATCH /options/price). */
+  async patchOptionPrice(merchantId: string, optionId: string, value: number): Promise<{ status: number; data: any }> {
+    return this.req('PATCH', `/merchants/${merchantId}/options/price`, { optionId, price: { value } });
+  }
+
   // ---- escrita em lote (assíncrona) ----
   /**
    * ⭐ MODO PONTE: reprecifica por CÓDIGO DE PDV, sem conhecer id do iFood.

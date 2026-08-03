@@ -146,6 +146,37 @@ export class CatalogoService {
     return this.statusEmMassa(merchantId, [{ pdv, status }], context);
   }
 
+  /**
+   * Altera o preço de UM item por PDV via PATCH /items/price (por itemId, síncrono).
+   * Preserva a promoção de/por. Endpoint exigido na homologação (Catalog).
+   */
+  async precoItem(merchantId: string, pdv: string, valor: number): Promise<{ ok: boolean; erro?: string }> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { ok: false, erro: 'item não encontrado' };
+    const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
+    const orig = (ctx?.price ?? ref.item.price)?.originalValue;
+    const r = await this.ifood.patchItemPrice(merchantId, ref.itemId, valor, orig);
+    if (r.status >= 200 && r.status < 300) return { ok: true };
+    const e = mapErroIfood(r.status, r.data);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /** Pausa/reativa UM item por PDV via PATCH /items/status (por itemId). */
+  async statusItem(merchantId: string, pdv: string, status: 'no_ar' | 'pausado'): Promise<{ ok: boolean; erro?: string }> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { ok: false, erro: 'item não encontrado' };
+    const ok = await this.ifood.setItemStatus(merchantId, ref.itemId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
+    return ok ? { ok: true } : { ok: false, erro: 'não consegui alterar o status do item' };
+  }
+
+  /** Altera o preço de uma OPÇÃO (complemento) via PATCH /options/price (por optionId). */
+  async precoOpcao(merchantId: string, optionId: string, valor: number): Promise<{ ok: boolean; erro?: string }> {
+    const r = await this.ifood.patchOptionPrice(merchantId, optionId, valor);
+    if (r.status >= 200 && r.status < 300) return { ok: true };
+    const e = mapErroIfood(r.status, r.data);
+    return { ok: false, erro: e.mensagem };
+  }
+
   /** Pausa/reativa VÁRIOS itens por PDV numa única chamada (atualização em massa). */
   async statusEmMassa(
     merchantId: string,

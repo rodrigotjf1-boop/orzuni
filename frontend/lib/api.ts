@@ -143,10 +143,13 @@ export const api = {
       body: JSON.stringify({ itens }),
     }),
   status: (pdv: string, status: 'no_ar' | 'pausado') =>
-    req<{ batchId: string | null }>(`v1/itens/${encodeURIComponent(pdv)}/status`, {
+    req<{ ok: boolean; erro?: string }>(`v1/itens/${encodeURIComponent(pdv)}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  // preço de UM item via PATCH /items/price (por itemId, no backend)
+  precoItem: (pdv: string, preco: number) =>
+    req<{ ok: boolean; erro?: string }>(`v1/itens/${encodeURIComponent(pdv)}/preco`, { method: 'PATCH', body: JSON.stringify({ preco }) }),
   statusMassa: (itens: Array<{ pdv: string; status: 'no_ar' | 'pausado' }>) =>
     req<{ batchId: string | null }>('v1/status', { method: 'PATCH', body: JSON.stringify({ itens }) }),
   categorias: () => req<{ categorias: Array<{ nome: string; template: string; itens: number }> }>('v1/categorias'),
@@ -168,6 +171,9 @@ export const api = {
     req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   statusOpcao: (optionId: string, status: 'no_ar' | 'pausado') =>
     req<{ ok: boolean; erro?: string }>(`v1/complementos/opcao/${encodeURIComponent(optionId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  // preço de UMA opção via PATCH /options/price
+  precoOpcao: (optionId: string, preco: number) =>
+    req<{ ok: boolean; erro?: string }>(`v1/complementos/opcao/${encodeURIComponent(optionId)}/preco`, { method: 'PATCH', body: JSON.stringify({ preco }) }),
   editarGrupo: (grupoId: string, dados: { nome: string; min: number; max: number; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }) =>
     req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'PATCH', body: JSON.stringify(dados) }),
   removerGrupo: (grupoId: string) => req<{ ok: boolean; erro?: string }>(`v1/complementos/${encodeURIComponent(grupoId)}`, { method: 'DELETE' }),
