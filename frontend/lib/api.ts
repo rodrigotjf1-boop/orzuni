@@ -154,6 +154,7 @@ export const api = {
     req<{ batchId: string | null }>('v1/status', { method: 'PATCH', body: JSON.stringify({ itens }) }),
   categorias: () => req<{ categorias: Array<{ nome: string; template: string; itens: number }> }>('v1/categorias'),
   criarCategoria: (nome: string) => req<{ ok: boolean; categoryId?: string; erro?: string }>('v1/categorias', { method: 'POST', body: JSON.stringify({ nome }) }),
+  removerCategoria: (nome: string) => req<{ ok: boolean; erro?: string }>(`v1/categorias?nome=${encodeURIComponent(nome)}`, { method: 'DELETE' }),
   criarItem: (dados: {
     nome: string;
     descricao?: string;

@@ -23,6 +23,8 @@ export default function CardapioPage() {
   const [ocupado, setOcupado] = useState<string | null>(null); // pdv em ação (duplicar)
   const [precoMassa, setPrecoMassa] = useState<number | null>(null); // preço em massa (seleção)
   const [aplicandoMassa, setAplicandoMassa] = useState(false);
+  const [catList, setCatList] = useState<Array<{ nome: string; template: string; itens: number }> | null>(null); // todas as categorias (modal)
+  const [removendoCat, setRemovendoCat] = useState<string | null>(null); // nome da categoria em remoção
   const toast = useToast();
   const router = useRouter();
 
@@ -39,6 +41,21 @@ export default function CardapioPage() {
     carregar();
   }, [carregar]);
 
+  const carregarCategorias = useCallback(async () => {
+    setCatList(null);
+    try {
+      const r = await api.categorias();
+      setCatList(r.categorias);
+    } catch {
+      setCatList([]);
+    }
+  }, []);
+
+  function abrirCategorias() {
+    setModalCat(true);
+    carregarCategorias();
+  }
+
   async function criarCategoria() {
     const nome = novaCat.trim();
     if (!nome) return;
@@ -47,8 +64,8 @@ export default function CardapioPage() {
       const r = await api.criarCategoria(nome);
       if (r.ok) {
         toast(`<b style="color:var(--green)">Categoria "${nome}"</b> criada ✓`);
-        setModalCat(false);
         setNovaCat('');
+        carregarCategorias();
         carregar();
       } else {
         toast(`Erro: ${r.erro || 'não foi possível criar'}`);
@@ -57,6 +74,24 @@ export default function CardapioPage() {
       toast(`Erro: ${e.message}`);
     } finally {
       setCriandoCat(false);
+    }
+  }
+
+  async function removerCategoria(nome: string) {
+    setRemovendoCat(nome);
+    try {
+      const r = await api.removerCategoria(nome);
+      if (r.ok) {
+        toast(`<b style="color:var(--green)">Categoria "${nome}"</b> removida ✓`);
+        carregarCategorias();
+        carregar();
+      } else {
+        toast(`Erro: ${r.erro || 'não foi possível remover'}`);
+      }
+    } catch (e: any) {
+      toast(`Erro: ${e.message}`);
+    } finally {
+      setRemovendoCat(null);
     }
   }
 
@@ -211,8 +246,8 @@ export default function CardapioPage() {
           <Link href="/combo/novo" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
             + Combo
           </Link>
-          <button className="btn ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setModalCat(true)}>
-            + Categoria
+          <button className="btn ghost" style={{ whiteSpace: 'nowrap' }} onClick={abrirCategorias}>
+            Categorias
           </button>
           <Link href="/complementos" className="btn ghost" style={{ whiteSpace: 'nowrap' }}>
             Complementos
@@ -225,23 +260,53 @@ export default function CardapioPage() {
           onClick={() => !criandoCat && setModalCat(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
         >
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 100%)' }}>
-            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Nova categoria</h2>
-            <div className="sub" style={{ marginBottom: 14 }}>Cria uma categoria no seu cardápio do iFood.</div>
-            <input
-              autoFocus
-              value={novaCat}
-              onChange={(e) => setNovaCat(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && criarCategoria()}
-              maxLength={100}
-              placeholder="Ex.: Bebidas, Sobremesas…"
-              style={{ width: '100%', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.95rem', padding: '12px 14px' }}
-            />
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button className="btn ghost mini" disabled={criandoCat} onClick={() => setModalCat(false)}>Cancelar</button>
-              <button className="btn" disabled={criandoCat || !novaCat.trim()} onClick={criarCategoria}>
-                {criandoCat ? 'Criando…' : 'Criar categoria'}
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(460px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>Categorias</h2>
+            <div className="sub" style={{ marginBottom: 14 }}>Crie categorias e remova as que estiverem vazias.</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                autoFocus
+                value={novaCat}
+                onChange={(e) => setNovaCat(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && criarCategoria()}
+                maxLength={100}
+                placeholder="Ex.: Bebidas, Sobremesas…"
+                style={{ flex: 1, background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.95rem', padding: '12px 14px' }}
+              />
+              <button className="btn" disabled={criandoCat || !novaCat.trim()} onClick={criarCategoria} style={{ whiteSpace: 'nowrap' }}>
+                {criandoCat ? 'Criando…' : 'Criar'}
               </button>
+            </div>
+
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {catList === null && <div className="sub">Carregando categorias…</div>}
+              {catList?.length === 0 && <div className="sub">Nenhuma categoria ainda.</div>}
+              {catList?.map((c) => (
+                <div key={c.nome} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--ink)', border: '1px solid var(--line)', borderRadius: 10 }}>
+                  <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.nome}
+                    {c.template === 'PIZZA' && <span className="sub" style={{ marginLeft: 6 }}>· pizza</span>}
+                  </span>
+                  <span className="mono sub" style={{ flex: 'none' }}>{c.itens} {c.itens === 1 ? 'item' : 'itens'}</span>
+                  {c.itens === 0 ? (
+                    <button
+                      className="btn ghost mini"
+                      disabled={removendoCat === c.nome}
+                      onClick={() => removerCategoria(c.nome)}
+                      style={{ flex: 'none', color: 'var(--coral, #e5533d)' }}
+                      aria-label={`Remover categoria ${c.nome}`}
+                    >
+                      {removendoCat === c.nome ? '…' : 'Remover'}
+                    </button>
+                  ) : (
+                    <span className="sub" style={{ flex: 'none', fontSize: '.72rem' }} title="Tem itens — remova ou mova os itens antes">em uso</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn ghost mini" disabled={criandoCat} onClick={() => setModalCat(false)}>Fechar</button>
             </div>
           </div>
         </div>
