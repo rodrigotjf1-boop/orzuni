@@ -391,6 +391,24 @@ export class CatalogoService {
   }
 
   /**
+   * Remove uma categoria pelo NOME (modelo canônico — o ERP não conhece ids).
+   * Segurança: só remove se estiver VAZIA (sem itens); se tiver itens, recusa e
+   * orienta a mover/remover os itens antes (evita apagar produtos por engano).
+   */
+  async removerCategoria(merchantId: string, nome: string): Promise<{ ok: boolean; erro?: string }> {
+    const [cat] = await this.ifood.catalogs(merchantId);
+    if (!cat) return { ok: false, erro: 'catálogo não encontrado' };
+    const cats = await this.ifood.categories(merchantId, cat.catalogId);
+    const alvo = cats.find((c) => (c.name ?? '').trim().toLowerCase() === (nome ?? '').trim().toLowerCase());
+    if (!alvo) return { ok: false, erro: 'categoria não encontrada' };
+    if ((alvo.items?.length ?? 0) > 0) return { ok: false, erro: 'a categoria tem itens; mova ou remova os itens antes de excluí-la' };
+    const r = await this.ifood.deleteCategory(merchantId, alvo.id);
+    if (r.status >= 200 && r.status < 300) return { ok: true };
+    const e = mapErroIfood(r.status, r.data);
+    return { ok: false, erro: e.mensagem };
+  }
+
+  /**
    * Resolve o id da categoria a partir de {categoriaId | categoria(nome)}; cria se
    * não existir (com o `template` informado). Para pizza, procura/cria a categoria PIZZA.
    */

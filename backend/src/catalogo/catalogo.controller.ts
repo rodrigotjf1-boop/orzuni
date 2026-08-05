@@ -169,6 +169,12 @@ export class CatalogoController {
     return this.catalogo.criarCategoria(await this.merchant(req, body.loja), body.nome);
   }
 
+  /** DELETE /v1/categorias?nome=X — remove uma categoria VAZIA (recusa se tiver itens). */
+  @Delete('categorias')
+  async removerCategoria(@Req() req: any, @Query('nome') nome: string, @Query('loja') loja?: string) {
+    return this.catalogo.removerCategoria(await this.merchant(req, loja), nome);
+  }
+
   /** POST /v1/itens — cria um item (simples ou com complementos). Valida antes. */
   @Post('itens')
   async criarItem(@Req() req: any, @Body() body: DadosItem & { loja?: string }) {
