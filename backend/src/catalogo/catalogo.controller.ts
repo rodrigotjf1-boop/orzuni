@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
+import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
 import type { DadosItem, DadosPizza, DadosCombo, Shift } from './validacao';
@@ -32,23 +33,27 @@ export class CatalogoController {
     return lojas[0]?.merchantId ?? '';
   }
 
+  @Requer('catalogo:ler')
   @Get('cardapio')
   async cardapio(@Req() req: any, @Query('loja') loja?: string) {
     return { itens: await this.catalogo.cardapio(await this.merchant(req, loja)) };
   }
 
   /** GET /v1/contextos — canais do catálogo (DEFAULT/INDOOR/WHITELABEL). */
+  @Requer('catalogo:ler')
   @Get('contextos')
   async contextos(@Req() req: any, @Query('loja') loja?: string) {
     return { contextos: await this.catalogo.contextos(await this.merchant(req, loja)) };
   }
 
   /** GET /v1/categorias — todas as categorias (inclusive vazias) para o seletor. */
+  @Requer('catalogo:ler')
   @Get('categorias')
   async listarCategorias(@Req() req: any, @Query('loja') loja?: string) {
     return { categorias: await this.catalogo.categorias(await this.merchant(req, loja)) };
   }
 
+  @Requer('preco:escrever')
   @Patch('precos')
   async precos(
     @Req() req: any,
@@ -61,18 +66,21 @@ export class CatalogoController {
   }
 
   /** PATCH /v1/itens/:pdv/status — pausa/reativa UM item (PATCH /items/status por itemId). */
+  @Requer('status:escrever')
   @Patch('itens/:pdv/status')
   async status(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
     return this.catalogo.statusItem(await this.merchant(req, loja), pdv, body.status);
   }
 
   /** PATCH /v1/itens/:pdv/preco — altera o preço de UM item (PATCH /items/price por itemId). */
+  @Requer('preco:escrever')
   @Patch('itens/:pdv/preco')
   async precoItem(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja: string | undefined, @Body() body: { preco: number }) {
     return this.catalogo.precoItem(await this.merchant(req, loja), pdv, body.preco);
   }
 
   /** PATCH /v1/status — pausa/reativa VÁRIOS itens numa chamada (em massa). */
+  @Requer('status:escrever')
   @Patch('status')
   async statusMassa(
     @Req() req: any,
@@ -83,6 +91,7 @@ export class CatalogoController {
     return this.catalogo.statusEmMassa(await this.merchant(req, loja), body.itens ?? [], contexto || 'DEFAULT');
   }
 
+  @Requer('catalogo:ler')
   @Get('itens/:pdv')
   async detalhe(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
     const d = await this.catalogo.detalhe(await this.merchant(req, loja), pdv);
@@ -90,6 +99,7 @@ export class CatalogoController {
     return d;
   }
 
+  @Requer('catalogo:escrever')
   @Patch('itens/:pdv')
   async editar(
     @Req() req: any,
@@ -111,42 +121,49 @@ export class CatalogoController {
   }
 
   /** POST /v1/itens/:pdv/duplicar — cria uma cópia independente do item ("(cópia)"). */
+  @Requer('catalogo:escrever')
   @Post('itens/:pdv/duplicar')
   async duplicar(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
     return this.catalogo.duplicar(await this.merchant(req, loja), pdv);
   }
 
   /** DELETE /v1/itens/:pdv — remove o item do cardápio (apaga o produto principal). */
+  @Requer('catalogo:escrever')
   @Delete('itens/:pdv')
   async remover(@Req() req: any, @Param('pdv') pdv: string, @Query('loja') loja?: string) {
     return this.catalogo.remover(await this.merchant(req, loja), pdv);
   }
 
   /** GET /v1/complementos — grupos de complemento (INGREDIENTS) + itens onde aparecem. */
+  @Requer('catalogo:ler')
   @Get('complementos')
   async complementos(@Req() req: any, @Query('loja') loja?: string) {
     return { grupos: await this.catalogo.complementos(await this.merchant(req, loja)) };
   }
 
   /** PATCH /v1/complementos/opcao/:optionId/status — pausa/reativa UMA opção (cascateia p/ todos os itens do grupo). */
+  @Requer('status:escrever')
   @Patch('complementos/opcao/:optionId/status')
   async statusOpcao(@Req() req: any, @Param('optionId') optionId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
     return this.catalogo.statusOpcao(await this.merchant(req, loja), optionId, body.status);
   }
 
   /** PATCH /v1/complementos/opcao/:optionId/preco — altera o preço de UMA opção (PATCH /options/price). */
+  @Requer('preco:escrever')
   @Patch('complementos/opcao/:optionId/preco')
   async precoOpcao(@Req() req: any, @Param('optionId') optionId: string, @Query('loja') loja: string | undefined, @Body() body: { preco: number }) {
     return this.catalogo.precoOpcao(await this.merchant(req, loja), optionId, body.preco);
   }
 
   /** PATCH /v1/complementos/:grupoId/status — pausa/reativa o grupo inteiro. */
+  @Requer('status:escrever')
   @Patch('complementos/:grupoId/status')
   async statusGrupo(@Req() req: any, @Param('grupoId') grupoId: string, @Query('loja') loja: string | undefined, @Body() body: { status: 'no_ar' | 'pausado' }) {
     return this.catalogo.statusGrupo(await this.merchant(req, loja), grupoId, body.status);
   }
 
   /** PATCH /v1/complementos/:grupoId — edita nome/min/max/opções do grupo em todos os itens. */
+  @Requer('catalogo:escrever')
   @Patch('complementos/:grupoId')
   async editarGrupo(
     @Req() req: any,
@@ -158,41 +175,48 @@ export class CatalogoController {
   }
 
   /** DELETE /v1/complementos/:grupoId — remove o grupo (desanexa dos itens + apaga). */
+  @Requer('catalogo:escrever')
   @Delete('complementos/:grupoId')
   async removerGrupo(@Req() req: any, @Param('grupoId') grupoId: string, @Query('loja') loja?: string) {
     return this.catalogo.removerGrupo(await this.merchant(req, loja), grupoId);
   }
 
   /** POST /v1/categorias — cria uma categoria (valida nome). */
+  @Requer('catalogo:escrever')
   @Post('categorias')
   async criarCategoria(@Req() req: any, @Body() body: { nome: string; loja?: string }) {
     return this.catalogo.criarCategoria(await this.merchant(req, body.loja), body.nome);
   }
 
   /** DELETE /v1/categorias?nome=X — remove uma categoria VAZIA (recusa se tiver itens). */
+  @Requer('catalogo:escrever')
   @Delete('categorias')
   async removerCategoria(@Req() req: any, @Query('nome') nome: string, @Query('loja') loja?: string) {
     return this.catalogo.removerCategoria(await this.merchant(req, loja), nome);
   }
 
   /** POST /v1/itens — cria um item (simples ou com complementos). Valida antes. */
+  @Requer('catalogo:escrever')
   @Post('itens')
   async criarItem(@Req() req: any, @Body() body: DadosItem & { loja?: string }) {
     return this.catalogo.criarItem(await this.merchant(req, body.loja), body);
   }
 
   /** POST /v1/pizzas — cria uma pizza (type PIZZA, 4 grupos SIZE/CRUST/EDGE/TOPPING). */
+  @Requer('catalogo:escrever')
   @Post('pizzas')
   async criarPizza(@Req() req: any, @Body() body: DadosPizza & { loja?: string }) {
     return this.catalogo.criarPizza(await this.merchant(req, body.loja), body);
   }
 
   /** POST /v1/combos — cria um combo (type COMBO_V2, grupo principal + aninhados). */
+  @Requer('catalogo:escrever')
   @Post('combos')
   async criarCombo(@Req() req: any, @Body() body: DadosCombo & { loja?: string }) {
     return this.catalogo.criarCombo(await this.merchant(req, body.loja), body);
   }
 
+  @Requer('catalogo:ler')
   @Get('lotes/:batchId')
   async lote(@Req() req: any, @Param('batchId') batchId: string, @Query('loja') loja?: string) {
     return this.catalogo.batch(await this.merchant(req, loja), batchId);

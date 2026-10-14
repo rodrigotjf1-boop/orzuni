@@ -234,6 +234,8 @@ export const api = {
     listar: () => req<{ chaves: Chave[] }>('v1/chaves'),
     criar: (nome: string, escopos: string[], loja?: string) =>
       req<{ chave: string; prefixo: string }>('v1/chaves', { method: 'POST', body: JSON.stringify({ nome, escopos, loja }) }),
+    atualizarEscopos: (id: string, escopos: string[]) =>
+      req<{ ok: boolean }>(`v1/chaves/${id}`, { method: 'PATCH', body: JSON.stringify({ escopos }) }),
     revogar: (id: string) => req<{ ok: boolean }>(`v1/chaves/${id}`, { method: 'DELETE' }),
   },
   lojas: {
