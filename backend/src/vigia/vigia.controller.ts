@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
+import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { StoreService } from '../store/store.service';
 import { VigiaPoller } from './vigia.poller';
@@ -43,6 +44,7 @@ export class VigiaController {
     return { alertas: out };
   }
 
+  @Requer('vigia:ler')
   @Get('alertas')
   async alertas(@Req() req: any, @Query('loja') loja?: string) {
     return this.montarAlertas(await this.alvos(req, loja));
@@ -52,6 +54,7 @@ export class VigiaController {
    * POST /vigia/varrer — força uma varredura AGORA (não espera o poll de 2 min) e
    * devolve os alertas já reconciliados. Usado pelo botão "Atualizar" da tela.
    */
+  @Requer('vigia:escrever')
   @Post('varrer')
   async varrer(@Req() req: any, @Query('loja') loja?: string) {
     const alvo = await this.alvos(req, loja);

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AdminGuard } from './api-key.guard';
 import { ApiKeyService } from './api-key.service';
 
@@ -22,6 +22,12 @@ export class ChavesController {
     const r = await this.chaves.criar(body.nome || 'Sem nome', body.escopos ?? [], body.loja);
     if (!r) return { erro: 'banco indisponível' };
     return r; // { chave, prefixo }
+  }
+
+  /** Atualiza os escopos de uma chave (estreitar/ampliar a permissão). */
+  @Patch(':id')
+  async atualizar(@Param('id') id: string, @Body() body: { escopos: string[] }) {
+    return { ok: await this.chaves.atualizarEscopos(id, body.escopos ?? []) };
   }
 
   @Delete(':id')

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/api-key.guard';
+import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { LojaService } from './loja.service';
 
@@ -26,24 +27,28 @@ export class LojaController {
   }
 
   /** GET /v1/loja — detalhe + status da loja. */
+  @Requer('loja:ler')
   @Get()
   async painel(@Req() req: any, @Query('loja') loja?: string) {
     return this.loja.painel(await this.merchant(req, loja));
   }
 
   /** GET /v1/loja/lojas — lojas autorizadas ao app (paginação opcional page/size). */
+  @Requer('loja:ler')
   @Get('lojas')
   async lojas(@Query('page') page?: string, @Query('size') size?: string) {
     return { lojas: await this.loja.lojas(page ? +page : undefined, size ? +size : undefined) };
   }
 
   /** GET /v1/loja/interrupcoes — pausas atuais. */
+  @Requer('loja:ler')
   @Get('interrupcoes')
   async interrupcoes(@Req() req: any, @Query('loja') loja?: string) {
     return { interrupcoes: await this.loja.interrupcoes(await this.merchant(req, loja)) };
   }
 
   /** POST /v1/loja/interrupcoes — cria uma pausa (início/fim ISO). */
+  @Requer('loja:escrever')
   @Post('interrupcoes')
   async criarInterrupcao(
     @Req() req: any,
@@ -54,18 +59,21 @@ export class LojaController {
   }
 
   /** DELETE /v1/loja/interrupcoes/:id — cancela uma pausa. */
+  @Requer('loja:escrever')
   @Delete('interrupcoes/:id')
   async cancelarInterrupcao(@Req() req: any, @Param('id') id: string, @Query('loja') loja?: string) {
     return this.loja.cancelarInterrupcao(await this.merchant(req, loja), id);
   }
 
   /** GET /v1/loja/horarios — horário de funcionamento. */
+  @Requer('loja:ler')
   @Get('horarios')
   async horarios(@Req() req: any, @Query('loja') loja?: string) {
     return this.loja.horarios(await this.merchant(req, loja));
   }
 
   /** PUT /v1/loja/horarios — salva o horário (substitui todos os turnos). */
+  @Requer('loja:escrever')
   @Put('horarios')
   async salvarHorarios(
     @Req() req: any,

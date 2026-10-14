@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ApiKeyService } from './api-key.service';
 import { ApiKeyGuard, AdminGuard } from './api-key.guard';
+import { ApiKeyRateLimit } from './api-key.rate-limit';
 import { ChavesController } from './chaves.controller';
 
 /**
@@ -9,8 +10,8 @@ import { ChavesController } from './chaves.controller';
  */
 @Global()
 @Module({
-  providers: [ApiKeyService, ApiKeyGuard, AdminGuard],
+  providers: [ApiKeyService, ApiKeyGuard, AdminGuard, ApiKeyRateLimit],
   controllers: [ChavesController],
-  exports: [ApiKeyService, ApiKeyGuard, AdminGuard],
+  exports: [ApiKeyService, ApiKeyGuard, AdminGuard, ApiKeyRateLimit],
 })
 export class AuthModule {}

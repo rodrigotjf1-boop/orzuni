@@ -1,6 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, HttpException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { timingSafeEqual } from 'crypto';
 import { ApiKeyService } from './api-key.service';
+import { ApiKeyRateLimit } from './api-key.rate-limit';
+import { ESCOPO_KEY } from './requer.decorator';
 
 function bearer(req: any): string {
   const auth: string = req.headers['authorization'] ?? '';
@@ -24,7 +27,11 @@ function igual(a: string, b: string): boolean {
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
   private readonly logger = new Logger('auth');
-  constructor(private readonly chaves: ApiKeyService) {}
+  constructor(
+    private readonly chaves: ApiKeyService,
+    private readonly reflector: Reflector,
+    private readonly limite: ApiKeyRateLimit,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest();
@@ -38,18 +45,34 @@ export class ApiKeyGuard implements CanActivate {
     const token = bearer(req);
     if (!token) throw new UnauthorizedException('chave de API inválida');
 
+    // chave de ADMIN (env): acesso total — ignora escopo e teto por chave (é o painel/proxy).
     if (keys.some((k) => igual(k, token))) {
       req.keyType = 'admin';
       return true;
     }
+
     const r = await this.chaves.validarTabela(token);
-    if (r) {
-      req.keyType = 'api';
-      req.keyId = r.keyId;
-      req.contaMerchant = r.merchantId; // loja ligada à chave (multi-loja)
-      return true;
+    if (!r) throw new UnauthorizedException('chave de API inválida');
+    req.keyType = 'api';
+    req.keyId = r.keyId;
+    req.contaMerchant = r.merchantId; // loja ligada à chave (multi-loja)
+    req.keyScopes = r.escopos;
+
+    // permissão: a rota declara o que exige (@Requer). A chave precisa ter TODOS.
+    const exigidos = this.reflector.getAllAndOverride<string[]>(ESCOPO_KEY, [ctx.getHandler(), ctx.getClass()]) ?? [];
+    const faltando = exigidos.filter((e) => !r.escopos.includes(e));
+    if (faltando.length) {
+      throw new ForbiddenException(`a chave não tem permissão para esta ação (falta: ${faltando.join(', ')})`);
     }
-    throw new UnauthorizedException('chave de API inválida');
+
+    // teto por chave (429 + Retry-After).
+    const lim = this.limite.checar(r.keyId, r.rateLimit);
+    if (!lim.ok) {
+      const res = ctx.switchToHttp().getResponse();
+      res.setHeader?.('Retry-After', String(lim.retryAfter));
+      throw new HttpException('limite de requisições da chave excedido', 429);
+    }
+    return true;
   }
 }
 

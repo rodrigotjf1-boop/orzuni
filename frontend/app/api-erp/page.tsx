@@ -5,8 +5,13 @@ import { useToast } from '@/components/toast';
 
 const ESCOPOS = [
   { id: 'catalogo:ler', label: 'ler cardápio' },
+  { id: 'catalogo:escrever', label: 'criar/editar/remover' },
   { id: 'preco:escrever', label: 'mudar preço' },
   { id: 'status:escrever', label: 'pausar/reativar' },
+  { id: 'loja:ler', label: 'ler loja' },
+  { id: 'loja:escrever', label: 'pausa/horário' },
+  { id: 'vigia:ler', label: 'ler vigia' },
+  { id: 'vigia:escrever', label: 'forçar vigia' },
 ];
 
 export default function ApiErpPage() {
@@ -20,6 +25,10 @@ export default function ApiErpPage() {
   // adicionar loja
   const [lojaMerchant, setLojaMerchant] = useState('');
   const [lojaNome, setLojaNome] = useState('');
+  // editar escopos de uma chave existente
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editEsc, setEditEsc] = useState<string[]>([]);
+  const [salvandoEsc, setSalvandoEsc] = useState(false);
   const toast = useToast();
 
   const carregar = useCallback(async () => {
@@ -67,6 +76,29 @@ export default function ApiErpPage() {
     await api.chaves.revogar(id);
     toast('Chave revogada.');
     carregar();
+  }
+
+  function abrirEdicao(c: Chave) {
+    setEditId(c.id);
+    setEditEsc(c.escopos);
+  }
+  async function salvarEscopos() {
+    if (!editId) return;
+    setSalvandoEsc(true);
+    try {
+      const r = await api.chaves.atualizarEscopos(editId, editEsc);
+      if (r.ok) {
+        toast('Permissões atualizadas.');
+        setEditId(null);
+        carregar();
+      } else {
+        toast('Não foi possível atualizar.');
+      }
+    } catch (e: any) {
+      toast(`Erro: ${e.message}`);
+    } finally {
+      setSalvandoEsc(false);
+    }
   }
 
   const card = { border: '1px solid var(--line)', borderRadius: 20, background: 'rgba(23,17,20,.85)', padding: 22, marginBottom: 18 } as const;
@@ -181,26 +213,60 @@ export default function ApiErpPage() {
         {!chaves && !erro && <div className="loading">Carregando…</div>}
         {chaves && chaves.length === 0 && <div className="sub" style={{ margin: 0 }}>Nenhuma chave ainda. Crie a primeira acima.</div>}
         {chaves?.map((c) => (
-          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderTop: '1px solid var(--line)' }}>
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderTop: '1px solid var(--line)', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <b style={{ fontSize: '.92rem' }}>{c.nome}</b>
               <div className="mono" style={{ color: 'var(--dim)', fontSize: '.7rem', textTransform: 'none', marginTop: 3 }}>
                 {c.prefixo}•••••••• · {c.loja ? c.loja.nome : 'todas as lojas'}
               </div>
-              <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
-                {c.escopos.map((s) => (
-                  <span key={s} className="mono" style={{ fontSize: '.55rem', padding: '3px 8px', borderRadius: 6, background: 'var(--ink3)', color: 'var(--dim)' }}>
-                    {s}
-                  </span>
-                ))}
-              </div>
+              {editId === c.id ? (
+                <div style={{ display: 'flex', gap: 7, marginTop: 8, flexWrap: 'wrap' }}>
+                  {ESCOPOS.map((e) => {
+                    const on = editEsc.includes(e.id);
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => setEditEsc((s) => (on ? s.filter((x) => x !== e.id) : [...s, e.id]))}
+                        className="mono"
+                        style={{ fontSize: '.58rem', padding: '6px 10px', borderRadius: 99, border: '1px solid var(--line)', cursor: 'pointer', background: on ? 'var(--accent-soft, rgba(139,92,246,.15))' : 'var(--ink3)', color: on ? 'var(--lilac)' : 'var(--dim)' }}
+                      >
+                        {e.id}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+                  {c.escopos.map((s) => (
+                    <span key={s} className="mono" style={{ fontSize: '.55rem', padding: '3px 8px', borderRadius: 6, background: 'var(--ink3)', color: 'var(--dim)' }}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            <span className="mono" style={{ color: 'var(--dim)', fontSize: '.6rem', textTransform: 'none' }}>
-              {c.ultimoUso ? 'usada' : 'nunca usada'}
-            </span>
-            <button className="btn ghost mini" onClick={() => revogar(c.id, c.nome)}>
-              Revogar
-            </button>
+            {editId === c.id ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn mini" disabled={salvandoEsc} onClick={salvarEscopos}>
+                  {salvandoEsc ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button className="btn ghost mini" disabled={salvandoEsc} onClick={() => setEditId(null)}>
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="mono" style={{ color: 'var(--dim)', fontSize: '.6rem', textTransform: 'none' }}>
+                  {c.ultimoUso ? 'usada' : 'nunca usada'}
+                </span>
+                <button className="btn ghost mini" onClick={() => abrirEdicao(c)}>
+                  Editar permissões
+                </button>
+                <button className="btn ghost mini" onClick={() => revogar(c.id, c.nome)}>
+                  Revogar
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>
