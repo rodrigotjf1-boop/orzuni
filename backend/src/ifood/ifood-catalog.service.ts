@@ -109,7 +109,9 @@ export class IfoodCatalogService {
   /** Lista os catálogos do merchant. Sempre o 1º passo (dá catalogId, groupId, modifiedAt). */
   async catalogs(merchantId: string): Promise<IfoodCatalog[]> {
     const { data } = await this.req<IfoodCatalog[]>('GET', `/merchants/${merchantId}/catalogs`);
-    return data ?? [];
+    // merchant inválido/sem rota devolve o corpo do erro (objeto), não uma lista:
+    // garantir lista para o chamador (ex.: `const [cat] = ...` no vigia) nunca quebrar.
+    return Array.isArray(data) ? data : [];
   }
 
   /** Categorias + itens + complementos (o "dump" do cardápio). */
