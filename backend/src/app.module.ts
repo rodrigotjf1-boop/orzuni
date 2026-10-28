@@ -9,6 +9,7 @@ import { VigiaModule } from './vigia/vigia.module';
 import { CatalogoModule } from './catalogo/catalogo.module';
 import { LojaModule } from './loja/loja.module';
 import { AuthModule } from './auth/auth.module';
+import { UsuarioModule } from './usuario/usuario.module';
 import { TelemetriaModule } from './telemetria/telemetria.module';
 
 /**
@@ -22,6 +23,7 @@ import { TelemetriaModule } from './telemetria/telemetria.module';
     TelemetriaModule,
     StoreModule,
     AuthModule,
+    UsuarioModule,
     IfoodModule,
     ContaModule,
     VigiaModule,
