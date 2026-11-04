@@ -8,5 +8,6 @@ import { CatalogoController } from './catalogo.controller';
   imports: [IfoodModule, ContaModule],
   providers: [CatalogoService],
   controllers: [CatalogoController],
+  exports: [CatalogoService],
 })
 export class CatalogoModule {}

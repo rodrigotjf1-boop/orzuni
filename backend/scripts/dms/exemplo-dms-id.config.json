@@ -1,0 +1,37 @@
+{
+  "modo": "dms_id",
+  "produto": "regemcast",
+  "base": "http://localhost:3000",
+  "porta": "mcp",
+  "leitura": {
+    "caminho": "/api/v1/mcp",
+    "permissao": "orcamento.ler",
+    "cabecalhos": { "mcp-method": "tools/call", "mcp-name": "orcamento_ler", "mcp-protocol-version": "2026-07-28" },
+    "corpo": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "orcamento_ler",
+        "arguments": {},
+        "_meta": {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": { "name": "kit-dms", "version": "1" },
+          "io.modelcontextprotocol/clientCapabilities": {}
+        }
+      }
+    }
+  },
+  "limite": { "chamadas": 121 },
+  "copiaDoPacote": "backend/src/dms/integracao-dms.ts",
+  "credenciais": {
+    "token": "DMS_KIT_TOKEN",
+    "ligacao": "DMS_KIT_LIGACAO",
+    "tokenOutroDestino": "DMS_KIT_TOKEN_OUTRO_DESTINO",
+    "tokenVencido": "DMS_KIT_TOKEN_VENCIDO",
+    "tokenSemPermissao": "DMS_KIT_TOKEN_SEM_PERMISSAO",
+    "tokenOutroAplicativo": "DMS_KIT_TOKEN_OUTRO_APLICATIVO",
+    "ligacaoRevogada": "DMS_KIT_LIGACAO_REVOGADA",
+    "ligacaoSemPermissao": "DMS_KIT_LIGACAO_SEM_PERMISSAO"
+  }
+}

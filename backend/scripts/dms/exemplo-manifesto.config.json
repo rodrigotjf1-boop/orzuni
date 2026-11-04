@@ -1,0 +1,6 @@
+{
+  "modo": "manifesto",
+  "produto": "regem",
+  "arquivo": "docs/dms-manifesto.json",
+  "copiaDoPacote": "backend/src/dms/integracao-dms.ts"
+}

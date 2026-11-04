@@ -1,0 +1,479 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Porta de integração do Orzuni",
+    "version": "1.0.0",
+    "description": "A porta MCP que os produtos da DMS ligados à loja usam para ver e mexer no cardápio da loja no iFood: itens, preços, pausas, complementos e os alertas do vigia. Credencial: o token do DMS ID com o segredo da ligação (DMS-Ligacao).",
+    "x-dms-produto": "orzuni",
+    "x-dms-pacote": "0.9.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.orzuni.com"
+    }
+  ],
+  "security": [
+    {
+      "dmsId": []
+    }
+  ],
+  "paths": {},
+  "components": {
+    "securitySchemes": {
+      "dmsId": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token do DMS ID, com o segredo da ligação no cabeçalho DMS-Ligacao (Padrão §2.1)"
+      }
+    },
+    "schemas": {
+      "Problema": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "x-dms-permissoes": {
+    "catalogo.ler": {
+      "frase": "Ver o cardápio da loja no iFood: itens, categorias, complementos, preços e situação.",
+      "classes": [
+        "dms",
+        "parceiro",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "loja.ler": {
+      "frase": "Ver os dados e a situação da loja no iFood.",
+      "classes": [
+        "dms",
+        "parceiro",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "vigia.ler": {
+      "frase": "Ver os alertas do vigia: itens pausados e há quanto tempo.",
+      "classes": [
+        "dms",
+        "parceiro",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "catalogo.escrever": {
+      "frase": "Editar e publicar o cardápio da loja no iFood.",
+      "classes": [
+        "dms",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "preco.escrever": {
+      "frase": "Mudar o preço de itens e complementos no iFood.",
+      "classes": [
+        "dms",
+        "proprio"
+      ],
+      "sensivel": true
+    },
+    "status.escrever": {
+      "frase": "Pausar e reativar itens no iFood.",
+      "classes": [
+        "dms",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "loja.escrever": {
+      "frase": "Pausar a loja e mudar os horários no iFood.",
+      "classes": [
+        "dms",
+        "proprio"
+      ],
+      "sensivel": false
+    },
+    "vigia.escrever": {
+      "frase": "Forçar uma varredura do vigia.",
+      "classes": [
+        "dms",
+        "proprio"
+      ],
+      "sensivel": false
+    }
+  },
+  "x-dms-limite": {
+    "porMinuto": 120,
+    "por": "ligacao"
+  },
+  "x-dms-ferramentas": [
+    {
+      "nome": "integracao_situacao",
+      "descricao": "Diz para qual loja do Orzuni (o merchant do iFood) este token vale, qual produto o token identifica e o que pode fazer. Use para conferir a conexão antes de qualquer outra ferramenta.",
+      "permissao": null,
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "cardapio_listar",
+      "descricao": "Lista os itens do cardápio da loja no iFood, cada um com o código de PDV, o preço e se está no ar ou pausado.",
+      "permissao": "catalogo.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "categorias_listar",
+      "descricao": "As categorias do cardápio da loja no iFood, inclusive as vazias.",
+      "permissao": "catalogo.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "item_ler",
+      "descricao": "O detalhe de um item do cardápio pelo código de PDV: nome, descrição, preço, situação e complementos.",
+      "permissao": "catalogo.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          }
+        },
+        "required": [
+          "codigo_pdv"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "complementos_listar",
+      "descricao": "Os grupos de complemento (adicionais/opções) da loja no iFood e os itens em que aparecem.",
+      "permissao": "catalogo.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "alertas_listar",
+      "descricao": "Os itens que estão fora do ar no iFood e há quanto tempo (o que o iFood não diz). Mostra o motivo da queda.",
+      "permissao": "vigia.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "loja_status_ler",
+      "descricao": "O detalhe e a situação da loja no iFood (aberta, fechada, pausada).",
+      "permissao": "loja.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "loja_horarios_ler",
+      "descricao": "O horário de funcionamento da loja no iFood.",
+      "permissao": "loja.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "preco_definir",
+      "descricao": "Muda o preço de UM item no iFood, pelo código de PDV. O valor vai em reais (ex.: 29.90).",
+      "permissao": "preco.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "valor": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "O preço em reais."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "valor",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "precos_em_massa",
+      "descricao": "Muda o preço de VÁRIOS itens de uma vez no iFood, por código de PDV (reprecificação em lote). Devolve um batchId para acompanhar.",
+      "permissao": "preco.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "itens": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "codigo_pdv": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+                },
+                "valor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "manter_promo": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "codigo_pdv",
+                "valor"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "contexto": {
+            "description": "O canal do catálogo (DEFAULT, INDOOR…). Padrão: DEFAULT.",
+            "type": "string"
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "itens",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "item_pausar",
+      "descricao": "Pausa (tira do ar) UM item no iFood, pelo código de PDV.",
+      "permissao": "status.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "item_reativar",
+      "descricao": "Reativa (põe no ar) UM item no iFood, pelo código de PDV.",
+      "permissao": "status.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "complemento_pausar",
+      "descricao": "Pausa uma opção (complemento) no iFood, pelo id da opção. Cascateia para todos os itens do grupo.",
+      "permissao": "status.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "opcao_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "O id da opção no iFood (veja complementos_listar)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "opcao_id",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "complemento_reativar",
+      "descricao": "Reativa uma opção (complemento) no iFood, pelo id da opção.",
+      "permissao": "status.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "opcao_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "O id da opção no iFood."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "opcao_id",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "interrupcao_criar",
+      "descricao": "Cria uma pausa programada da LOJA inteira no iFood (não de um item), com início e fim em ISO 8601.",
+      "permissao": "loja.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "inicio": {
+            "type": "string",
+            "description": "Início da pausa, em ISO 8601."
+          },
+          "fim": {
+            "type": "string",
+            "description": "Fim da pausa, em ISO 8601."
+          },
+          "descricao": {
+            "description": "O motivo da pausa (opcional).",
+            "type": "string",
+            "maxLength": 200
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "inicio",
+          "fim",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    }
+  ],
+  "x-dms-avisos": [],
+  "x-dms-mcp": {
+    "endereco": "https://api.orzuni.com/v1/mcp",
+    "versao": "2026-07-28"
+  }
+}
