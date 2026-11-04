@@ -8,5 +8,6 @@ import { LojaController } from './loja.controller';
   imports: [IfoodModule, ContaModule],
   providers: [LojaService],
   controllers: [LojaController],
+  exports: [LojaService],
 })
 export class LojaModule {}

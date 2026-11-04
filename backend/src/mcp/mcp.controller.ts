@@ -1,0 +1,55 @@
+/**
+ * A porta MCP: `POST /v1/mcp`. O portão (`IntegracaoGuard`) reconhece a
+ * credencial e aplica o limite; daqui o pedido vai ao SDK oficial como um
+ * `Request` da web, SEM os cabeçalhos de credencial (nem o token nem o segredo
+ * da ligação passam). GET/DELETE (sessão da geração 2025) não existem num
+ * servidor sem estado: 405.
+ */
+import { All, Controller, HttpCode, HttpStatus, Post, Req, Res, UseFilters, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import type { Response } from 'express';
+import { Readable } from 'node:stream';
+
+import { IntegracaoGuard, type RequestDeIntegracao } from './integracao.guard';
+import { CABECALHO_LIGACAO_NO_NODE } from './ligacao.regras';
+import { McpServidor } from './mcp.servidor';
+import { ProblemaFilter } from './problema.filter';
+
+/** Cabeçalhos que não seguem para o SDK: credencial e o que o Node recalcula. */
+const FICAM_NA_PORTA = new Set(['authorization', CABECALHO_LIGACAO_NO_NODE, 'cookie', 'host', 'connection', 'content-length', 'transfer-encoding']);
+
+@Controller('mcp')
+@SkipThrottle()
+@UseFilters(ProblemaFilter)
+export class McpController {
+  constructor(private readonly mcp: McpServidor) {}
+
+  @Post()
+  @UseGuards(IntegracaoGuard)
+  async pedir(@Req() req: RequestDeIntegracao, @Res() res: Response): Promise<void> {
+    const cabecalhos = new Headers();
+    for (const [nome, valor] of Object.entries(req.headers)) {
+      if (FICAM_NA_PORTA.has(nome.toLowerCase()) || valor === undefined) continue;
+      cabecalhos.set(nome, Array.isArray(valor) ? valor.join(', ') : (valor as string));
+    }
+    const url = `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}`;
+    const pedido = new Request(url, { method: 'POST', headers: cabecalhos });
+
+    const r = await this.mcp.handler.fetch(pedido, { authInfo: McpServidor.autorizacao(req.integracao!), parsedBody: req.body });
+
+    res.status(r.status);
+    r.headers.forEach((valor, nome) => res.setHeader(nome, valor));
+    if (!r.body) {
+      res.end();
+      return;
+    }
+    Readable.fromWeb(r.body as import('node:stream/web').ReadableStream).pipe(res);
+  }
+
+  @All()
+  @HttpCode(HttpStatus.METHOD_NOT_ALLOWED)
+  semSessao(@Res() res: Response): void {
+    res.setHeader('Allow', 'POST');
+    res.status(HttpStatus.METHOD_NOT_ALLOWED).json({ mensagem: 'Este servidor MCP é sem estado: só aceita POST.' });
+  }
+}

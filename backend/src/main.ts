@@ -3,6 +3,8 @@ import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { carregarPorta } from './mcp/config';
+import { ROTAS_FORA_DO_PREFIXO } from './mcp/ligacao.regras';
 
 async function bootstrap() {
   const prod = process.env.NODE_ENV === 'production';
@@ -18,6 +20,10 @@ async function bootstrap() {
     }
   }
 
+  // Porta MCP (via DMS ID): lê e valida as variáveis no boot. Nasce desligada
+  // (ORZUNI_MCP_ATIVO=false) — ligada e mal configurada, o boot cai aqui.
+  carregarPorta();
+
   // bodyParser: false + useBodyParser com limite maior — fotos vão como data-URI
   // base64 no corpo (até 5 MB → ~6,7 MB em base64); o padrão de 100 KB dá 413.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
@@ -27,7 +33,8 @@ async function bootstrap() {
   // atrás do Traefik/EasyPanel (1 hop) → req.ip = IP real do cliente (X-Forwarded-For),
   // para o rate limit contar por cliente, não pela cota global do proxy.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
-  app.setGlobalPrefix('v1');
+  // Os metadados do recurso e o manifesto ficam na raiz (fora de /v1).
+  app.setGlobalPrefix('v1', { exclude: ROTAS_FORA_DO_PREFIXO });
 
   const origins = (process.env.CORS_ORIGIN ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   app.enableCors({ origin: origins.length ? origins : true, methods: ['GET', 'PATCH', 'POST'] });
