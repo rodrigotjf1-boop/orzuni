@@ -25,4 +25,13 @@ jobs:
           cache-dependency-path: ${{ matrix.pacote }}/package-lock.json
       - run: node -v
       - run: npm ci
+        if: matrix.pacote != 'backend'
+      # O EasyPanel monta o backend com Nixpacks e NODE_ENV=production JA na instalacao: o npm ci pula as
+      # devDependencies. Instalar igual aqui garante que o que o build usa (nest, typescript, @types) esta em
+      # dependencies - o deploy do #49 caiu com "nest: not found" (codigo 127) por isso.
+      - name: npm ci como o painel monta (NODE_ENV=production)
+        if: matrix.pacote == 'backend'
+        run: npm ci
+        env:
+          NODE_ENV: production
       - run: npm run build
