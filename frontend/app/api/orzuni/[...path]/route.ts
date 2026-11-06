@@ -1,31 +1,52 @@
 import { NextRequest } from 'next/server';
+import { verificarSessao, ehAdmin } from '@/lib/sessao';
 
 /**
- * Proxy server-side para o orzuni-api. O navegador chama /api/orzuni/v1/...
- * e este handler injeta o Bearer da chave (que fica SÓ no servidor) e encaminha.
- * Assim a ORZUNI_API_KEY nunca vai para o cliente.
+ * Proxy server-side para o orzuni-api. O navegador chama /api/orzuni/v1/... e este
+ * handler decide a credencial que vai ao backend:
+ *  - telas de dados (cardápio, loja, vigia, minhas-lojas): encaminha o JWT de SESSÃO
+ *    do usuário (cookie `orz_session`) → o backend mostra só a loja do tenant dele;
+ *  - telas de ADMINISTRAÇÃO (chaves de API, lojas, diagnóstico): injeta a chave de
+ *    administrador (ORZUNI_API_KEY, só no servidor), e SÓ se o usuário estiver na
+ *    lista de administradores (ORZUNI_ADMIN_EMAILS). Assim a chave nunca vai ao
+ *    cliente e um usuário comum não alcança a administração.
  */
 export const dynamic = 'force-dynamic';
 
 const BASE = process.env.ORZUNI_API_BASE ?? 'https://api.orzuni.com';
 const KEY = process.env.ORZUNI_API_KEY ?? '';
 
+// caminhos de administração (precisam da chave admin, não da sessão do usuário)
+const RECURSOS_ADMIN = new Set(['chaves', 'lojas', 'telemetria']);
+function ehCaminhoAdmin(path: string[]): boolean {
+  // path = ['v1', '<recurso>', ...]
+  return path[0] === 'v1' && RECURSOS_ADMIN.has(path[1] ?? '');
+}
+
+function json(status: number, erro: string): Response {
+  return new Response(JSON.stringify({ error: erro }), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
 async function forward(req: NextRequest, path: string[]) {
-  // valida a sessão (o valor do cookie, não só a presença) — barra cookie forjado
-  const token = process.env.ORZUNI_SESSION_TOKEN ?? '';
-  const sess = req.cookies.get('orz_session')?.value ?? '';
-  if (!token || sess !== token) {
-    return new Response(JSON.stringify({ error: 'não autenticado' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const jwt = req.cookies.get('orz_session')?.value ?? '';
+  const sessao = verificarSessao(jwt);
+  if (!sessao) return json(401, 'não autenticado');
+
+  let autorizacao: string;
+  if (ehCaminhoAdmin(path)) {
+    if (!ehAdmin(sessao.email)) return json(403, 'sem acesso à administração');
+    if (!KEY) return json(500, 'administração não configurada');
+    autorizacao = `Bearer ${KEY}`; // chave de admin (só no servidor)
+  } else {
+    autorizacao = `Bearer ${jwt}`; // sessão do usuário → backend resolve a loja pelo tenant
   }
+
   const url = new URL(req.url);
   const alvo = `${BASE}/${path.join('/')}${url.search}`;
   const init: RequestInit = {
     method: req.method,
     headers: {
-      Authorization: `Bearer ${KEY}`,
+      Authorization: autorizacao,
       ...(req.headers.get('content-type') ? { 'Content-Type': req.headers.get('content-type')! } : {}),
     },
   };

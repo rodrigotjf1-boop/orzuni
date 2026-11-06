@@ -1,8 +1,22 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+
+const campo: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--ink)',
+  border: '1px solid var(--line)',
+  borderRadius: 11,
+  color: 'var(--cream)',
+  fontFamily: 'inherit',
+  fontSize: '.95rem',
+  padding: '12px 14px',
+  marginBottom: 12,
+};
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
@@ -16,14 +30,14 @@ export default function LoginPage() {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senha }),
+        body: JSON.stringify({ modo: 'login', email, senha }),
       });
       if (res.ok) {
         router.replace('/vigia');
         router.refresh();
       } else {
         const j = await res.json().catch(() => ({}));
-        setErro(j.erro === 'muitas tentativas' ? 'Muitas tentativas. Aguarde um minuto.' : 'Senha inválida.');
+        setErro(j.erro || 'E-mail ou senha inválidos.');
       }
     } catch {
       setErro('Falha de conexão.');
@@ -48,29 +62,34 @@ export default function LoginPage() {
         </svg>
         <div style={{ fontWeight: 800, fontSize: '1.4rem', letterSpacing: '-.02em', marginBottom: 4 }}>orzuni</div>
         <div className="mono" style={{ fontSize: '.58rem', color: 'var(--tanger)', letterSpacing: '.16em', marginBottom: 10 }}>gestão de cardápio · iFood</div>
-        <div className="sub" style={{ marginBottom: 22 }}>Gerencie o cardápio do seu iFood — sem abrir o portal.</div>
+        <div className="sub" style={{ marginBottom: 22 }}>Entre para cuidar do cardápio do seu iFood.</div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Seu e-mail"
+          autoComplete="username"
+          autoFocus
+          style={campo}
+        />
         <input
           type="password"
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
-          placeholder="Senha"
-          autoFocus
-          style={{
-            width: '100%',
-            background: 'var(--ink)',
-            border: '1px solid var(--line)',
-            borderRadius: 11,
-            color: 'var(--cream)',
-            fontFamily: 'inherit',
-            fontSize: '.95rem',
-            padding: '12px 14px',
-            marginBottom: 12,
-          }}
+          placeholder="Sua senha"
+          autoComplete="current-password"
+          style={campo}
         />
         {erro && <div style={{ color: 'var(--coral)', fontSize: '.82rem', marginBottom: 12 }}>{erro}</div>}
-        <button className="btn" type="submit" disabled={carregando || !senha} style={{ width: '100%', justifyContent: 'center' }}>
+        <button className="btn" type="submit" disabled={carregando || !email || !senha} style={{ width: '100%', justifyContent: 'center' }}>
           {carregando ? 'Entrando…' : 'Entrar'}
         </button>
+        <div className="sub" style={{ marginTop: 16, fontSize: '.82rem' }}>
+          Ainda não tem conta?{' '}
+          <Link href="/cadastro" style={{ color: 'var(--tanger)', fontWeight: 600 }}>
+            Criar conta
+          </Link>
+        </div>
       </form>
     </div>
   );

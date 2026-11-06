@@ -245,6 +245,13 @@ export const api = {
       req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
     remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
+  // As lojas do iFood DA CONTA do usuário logado (sessão). Isolado por tenant no backend.
+  minhasLojas: {
+    listar: () => req<{ lojas: Loja[] }>('v1/minhas-lojas'),
+    disponiveis: () => req<{ lojas: Loja[] }>('v1/minhas-lojas/disponiveis'),
+    conectar: (merchantId: string, nome: string) =>
+      req<{ ok: boolean; erro?: string }>('v1/minhas-lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
+  },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }> }) =>
     req<{ ok: boolean; erros: string[]; pdv?: string }>(`v1/itens/${encodeURIComponent(pdv)}`, {
       method: 'PATCH',
