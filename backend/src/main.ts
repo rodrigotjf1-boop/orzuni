@@ -4,6 +4,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { carregarPorta } from './mcp/config';
+import { carregarHub } from './hub/config';
 import { ROTAS_FORA_DO_PREFIXO } from './mcp/ligacao.regras';
 
 async function bootstrap() {
@@ -23,6 +24,9 @@ async function bootstrap() {
   // Porta MCP (via DMS ID): lê e valida as variáveis no boot. Nasce desligada
   // (ORZUNI_MCP_ATIVO=false) — ligada e mal configurada, o boot cai aqui.
   carregarPorta();
+  // Cliente do Hub DMS (registro/parada): nasce desligado (HUB_LIGADO=false).
+  // Ligado e mal configurado, o boot cai aqui — nunca um 401 misterioso depois.
+  carregarHub();
 
   // bodyParser: false + useBodyParser com limite maior — fotos vão como data-URI
   // base64 no corpo (até 5 MB → ~6,7 MB em base64); o padrão de 100 KB dá 413.
@@ -37,7 +41,7 @@ async function bootstrap() {
   app.setGlobalPrefix('v1', { exclude: ROTAS_FORA_DO_PREFIXO });
 
   const origins = (process.env.CORS_ORIGIN ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  app.enableCors({ origin: origins.length ? origins : true, methods: ['GET', 'PATCH', 'POST'] });
+  app.enableCors({ origin: origins.length ? origins : true, methods: ['GET', 'PATCH', 'POST', 'DELETE'] });
 
   const port = Number(process.env.PORT ?? 3100);
   await app.listen(port);

@@ -22,6 +22,8 @@ export interface IntegracaoAutenticada {
   produto: string;
   classe: string;
   nome: string;
+  /** O prefixo visível da ligação (`dms_lg_orzuni_…`), para o registro do hub — nunca o segredo. */
+  prefixo: string;
   escopos: string[];
 }
 
@@ -55,7 +57,7 @@ export class LigacaoService {
     if (!segredo) throw new ErroProblema('ligacao-invalida', LIGACAO_INVALIDA);
     const resumo = resumoChave(segredo);
     const rows = await this.store.query(
-      `select l.id, l.tenant_id, l.conta_id, l.aplicativo, l.produto, l.classe, l.escopos, l.revogada_em,
+      `select l.id, l.tenant_id, l.conta_id, l.aplicativo, l.produto, l.classe, l.escopos, l.revogada_em, l.prefixo,
               c.merchant_id, c.status as conta_status
          from ligacao_dms l join conta_ifood c on c.id = l.conta_id
         where l.segredo_hash = $1 limit 1`,
@@ -79,6 +81,7 @@ export class LigacaoService {
       produto: r.produto,
       classe: r.classe,
       nome: r.produto,
+      prefixo: r.prefixo,
       escopos: permissoesDaLigacao(l!, doToken.permissoes),
     };
   }

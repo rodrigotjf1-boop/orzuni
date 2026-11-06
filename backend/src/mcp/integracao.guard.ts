@@ -7,7 +7,9 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
-import { ErroProblema, JanelaFixa } from '../dms/integracao-dms';
+import { ErroProblema, JanelaFixa, problemaDaParada } from '../dms/integracao-dms';
+import { anotarChamada, ferramentasDoCorpo } from '../hub/chamada-atual';
+import { HubService } from '../hub/hub.service';
 import { porta } from './config';
 import { DmsIdService } from './dms-id.service';
 import { LigacaoService, type IntegracaoAutenticada } from './ligacao.service';
@@ -24,6 +26,7 @@ export class IntegracaoGuard implements CanActivate {
   constructor(
     private readonly ligacoes: LigacaoService,
     private readonly dmsId: DmsIdService,
+    private readonly hub: HubService,
   ) {}
 
   async canActivate(contexto: ExecutionContext): Promise<boolean> {
@@ -43,6 +46,12 @@ export class IntegracaoGuard implements CanActivate {
         throw new ErroProblema('limite-de-chamadas', `Limite de ${LIMITE_POR_MINUTO} chamadas por minuto atingido para esta ligação.`, { retryAfterSeg: uso.retryAfterSeg });
       }
       req.integracao = quem;
+
+      // Registro central do hub (§10): anota quem chamou; nunca o conteúdo.
+      const ferramenta = ferramentasDoCorpo(req.body)[0];
+      anotarChamada({ credencial: 'dms_id', aplicativo: quem.produto, conta: quem.contaId, ligacaoPrefixo: quem.prefixo, ferramenta });
+      // Parada do hub (§10): com o hub desligado é sempre nulo (nunca para).
+      if (this.hub.parado({ aplicativo: quem.produto, ligacaoPrefixo: quem.prefixo, ferramenta })) throw problemaDaParada();
       return true;
     } catch (erro) {
       const desafio = desafioDaRecusa(erro, bearer !== null, this.dmsId.enderecoDosMetadados());

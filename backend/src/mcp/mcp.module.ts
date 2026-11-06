@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 
+import { RegistroDaPorta } from '../hub/registro-da-porta.middleware';
 import { CatalogoModule } from '../catalogo/catalogo.module';
 import { ContaModule } from '../conta/conta.module';
 import { LojaModule } from '../loja/loja.module';
@@ -13,11 +14,17 @@ import { McpServidor } from './mcp.servidor';
 
 /**
  * A porta MCP (produto DMS). Nasce DESLIGADA por `ORZUNI_MCP_ATIVO`. StoreService
- * e ApiKeyService vêm dos módulos @Global (StoreModule e AuthModule).
+ * e ApiKeyService vêm dos módulos @Global (StoreModule e AuthModule); o HubService,
+ * do @Global HubModule. O `RegistroDaPorta` abre a chamada atual (registro do hub)
+ * na porta MCP e na troca/revogação da ligação.
  */
 @Module({
   imports: [CatalogoModule, LojaModule, ContaModule],
   controllers: [McpController, DmsIdController, ManifestoController],
-  providers: [McpServidor, DmsIdService, LigacaoService, IntegracaoGuard],
+  providers: [McpServidor, DmsIdService, LigacaoService, IntegracaoGuard, RegistroDaPorta],
 })
-export class McpModule {}
+export class McpModule implements NestModule {
+  configure(consumidor: MiddlewareConsumer): void {
+    consumidor.apply(RegistroDaPorta).forRoutes(McpController, DmsIdController);
+  }
+}
