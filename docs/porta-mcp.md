@@ -69,7 +69,11 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 | `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA, não um item) |
 
 ### Envelope de resposta das escritas (`structuredContent`)
-Toda escrita devolve, em `structuredContent`, o que a porta FEZ (o `content` texto carrega o mesmo JSON):
+Toda escrita devolve, em `structuredContent`, o que a porta FEZ. **Padrão §6:** o `content` de TEXTO
+é SEMPRE uma frase pt-BR legível (a que a tela mostraria) — no sucesso um resumo (ex.: `Preço alterado
+de R$ 19,90 para R$ 29,90.`), na recusa o motivo (ex.: `Código de PDV "137" não existe no cardápio do
+iFood desta loja.`) —, **nunca o JSON**. Quem precisa dos campos (`situacao`/`codigo`/`pode_repetir`/
+`opcoes`) lê o `structuredContent`; um cliente que só guarda o texto não corta o envelope nem mostra JSON cru.
 - `situacao`: `aplicado` · `sem_mudanca` · `nao_encontrado` · `parcial` · `recusado`.
 - `repetido`: `true` quando a resposta veio da MESMA `chaveIdempotencia` (não gravou de novo).
 - `antes` / `depois`: o preço antes e depois (nas tools de preço de item).
@@ -124,3 +128,7 @@ LADO DA PORTA (o id não envelhece no Regem). A resposta lista cada opção (gru
 - **O4** — complemento por código de PDV (`complemento_preco_definir`; `_pausar`/`_reativar` aceitam
   `codigo_pdv`) + **envelope `structuredContent`** nas escritas (situação/antes/depois/`repetido`/código). Fecha
   o R2 do Regem. `lote_ler` do `batchId` fica para depois (o Regem usa `preco_definir` síncrono).
+- **O5** — Padrão §6 no `content` de texto das escritas: a frase pt-BR SEMPRE (sucesso = resumo, recusa =
+  motivo), nunca o JSON (que fica só no `structuredContent`); frase de "PDV inexistente" nomeia o código. Para
+  o cliente que só guarda o texto na recusa, a frase não corta nem vaza JSON. (A perda do `structuredContent`
+  na recusa pelo `ClienteMcp 0.10.0` é correção do lado do HubDMS.)

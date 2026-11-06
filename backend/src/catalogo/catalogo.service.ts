@@ -1226,7 +1226,7 @@ export class CatalogoService {
   /** Define o preço de UM item por PDV; devolve antes/depois e a situação (sem_mudanca se já era o valor). */
   async definirPrecoItem(merchantId: string, pdv: string, valor: number): Promise<ResultadoEscrita> {
     const ref = await this.resolver(merchantId, pdv);
-    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhum item com esse código de PDV no iFood.' };
+    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
     const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
     const atual = ctx?.price ?? ref.item.price;
     const antes = atual?.value ?? 0;
@@ -1239,7 +1239,7 @@ export class CatalogoService {
   /** Pausa/reativa UM item por PDV; sem_mudanca se já estava no estado pedido. */
   async definirStatusItem(merchantId: string, pdv: string, status: 'no_ar' | 'pausado'): Promise<ResultadoEscrita> {
     const ref = await this.resolver(merchantId, pdv);
-    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhum item com esse código de PDV no iFood.' };
+    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
     if ((this.noAr(ref.item) ? 'no_ar' : 'pausado') === status) return { situacao: 'sem_mudanca' };
     const ok = await this.ifood.setItemStatus(merchantId, ref.itemId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
     return ok ? { situacao: 'aplicado' } : { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui alterar o status do item no iFood.' };
@@ -1274,7 +1274,7 @@ export class CatalogoService {
   /** Define o preço de TODAS as opções com um código de PDV (regra do Regem: 1 preço iFood por código). */
   async definirPrecoComplementoPorPdv(merchantId: string, codigoPdv: string, valor: number): Promise<ResultadoEscrita> {
     const alvos = await this.opcoesPorPdv(merchantId, codigoPdv);
-    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhuma opção de complemento com esse código de PDV no iFood.' };
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Nenhuma opção de complemento com o código de PDV "${codigoPdv}" no iFood desta loja.` };
     const opcoes: NonNullable<ResultadoEscrita['opcoes']> = [];
     let aplicadas = 0;
     let falhas = 0;
@@ -1300,7 +1300,7 @@ export class CatalogoService {
   /** Pausa/reativa TODAS as opções com um código de PDV. */
   async definirStatusComplementoPorPdv(merchantId: string, codigoPdv: string, status: 'no_ar' | 'pausado'): Promise<ResultadoEscrita> {
     const alvos = await this.opcoesPorPdv(merchantId, codigoPdv);
-    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhuma opção de complemento com esse código de PDV no iFood.' };
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Nenhuma opção de complemento com o código de PDV "${codigoPdv}" no iFood desta loja.` };
     const opcoes: NonNullable<ResultadoEscrita['opcoes']> = [];
     let aplicadas = 0;
     let falhas = 0;

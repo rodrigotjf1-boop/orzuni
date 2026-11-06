@@ -8,6 +8,12 @@
  * `situacao` (aplicado | sem_mudanca | nao_encontrado | parcial | recusado),
  * `antes`/`depois`, `opcoes` (complemento por código de PDV), `codigo` de recusa
  * distinto + `pode_repetir`, e `repetido` (se veio da mesma chaveIdempotencia).
+ *
+ * ⚠️ Padrão §6: o `content` de TEXTO de uma escrita é SEMPRE uma frase pt-BR
+ * legível (a que a tela mostraria) — no sucesso um resumo, na recusa o motivo —,
+ * NUNCA o JSON. O JSON (situacao/codigo/pode_repetir/opcoes) fica só no
+ * `structuredContent`. Assim um cliente que só guarda o texto (ex.: ClienteMcp
+ * 0.10.0 na recusa) não corta o envelope nem mostra JSON cru ao usuário.
  */
 import { HttpException, Logger } from '@nestjs/common';
 import type { McpServer } from '@modelcontextprotocol/server';
@@ -94,10 +100,35 @@ function envelope(r: ResultadoEscrita, repetido: boolean): Record<string, unknow
   return s;
 }
 
-/** Resposta da escrita: recusa → `isError` + envelope; sucesso → envelope como texto e `structuredContent`. */
+const emReais = (n?: number) => (n === undefined ? '' : `R$ ${n.toFixed(2).replace('.', ',')}`);
+
+/**
+ * A frase pt-BR legível da escrita (vai no `content` texto — Padrão §6). Na recusa,
+ * o motivo (`erro`). No sucesso, um resumo do que mudou. Nunca o JSON.
+ */
+function fraseEscrita(r: ResultadoEscrita): string {
+  if (EH_RECUSA.has(r.situacao)) return r.erro ?? 'Não foi possível concluir a ação.';
+  if (r.opcoes) {
+    const conta = (s: string) => r.opcoes!.filter((o) => o.situacao === s).length;
+    const partes = [`${conta('aplicado')} alterada(s)`, conta('sem_mudanca') ? `${conta('sem_mudanca')} sem mudança` : '', conta('recusado') ? `${conta('recusado')} não aplicada(s)` : ''].filter(Boolean);
+    return `Complemento: ${partes.join(', ')}.`;
+  }
+  if (r.situacao === 'sem_mudanca') return r.antes !== undefined ? `Nada mudou: o preço já era ${emReais(r.antes)}.` : 'Nada mudou: já estava assim.';
+  if (r.antes !== undefined && r.depois !== undefined) return `Preço alterado de ${emReais(r.antes)} para ${emReais(r.depois)}.`;
+  if (r.dados && 'batchId' in r.dados && r.dados.batchId) return 'Reprecificação em lote enviada ao iFood.';
+  return 'Feito.';
+}
+
+/** Resposta de sucesso de escrita: frase legível no texto + envelope no `structuredContent`. */
+function respostaEscrita(frase: string, estruturado: Record<string, unknown>) {
+  return { content: [{ type: 'text' as const, text: frase }], structuredContent: estruturado };
+}
+
+/** Resposta da escrita: texto = frase pt-BR SEMPRE; `structuredContent` = envelope; recusa → `isError`. */
 function montarEscrita(r: ResultadoEscrita, repetido: boolean): RespostaFerramenta {
   const s = envelope(r, repetido);
-  return EH_RECUSA.has(r.situacao) ? erroDaFerramenta(r.erro ?? 'Não foi possível concluir a ação.', s) : resposta(s, s);
+  const frase = fraseEscrita(r);
+  return EH_RECUSA.has(r.situacao) ? erroDaFerramenta(frase, s) : respostaEscrita(frase, s);
 }
 
 /**
