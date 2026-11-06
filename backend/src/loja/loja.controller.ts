@@ -1,15 +1,16 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiKeyGuard } from '../auth/api-key.guard';
+import { AcessoGuard } from '../auth/sessao.guard';
 import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { LojaService } from './loja.service';
 
 /**
  * API do módulo LOJA (Merchant) — base /v1. Status, interrupções (pausa) e horário de
- * funcionamento da loja. Multi-loja resolvido por requisição (igual ao Catalog).
+ * funcionamento da loja. Multi-loja resolvido por requisição (igual ao Catalog):
+ * sessão → só o próprio tenant; chave ligada → a dela; admin → ?loja= ou a 1ª.
  */
 @Controller('loja')
-@UseGuards(ApiKeyGuard)
+@UseGuards(AcessoGuard)
 export class LojaController {
   constructor(
     private readonly loja: LojaService,
@@ -17,6 +18,11 @@ export class LojaController {
   ) {}
 
   private async merchant(req: any, loja?: string): Promise<string> {
+    if (req?.acesso === 'sessao') {
+      const minhas = await this.contas.ativasDoTenant(req.usuario.tenant);
+      if (loja) return minhas.find((x) => x.merchantId === loja)?.merchantId ?? '';
+      return minhas[0]?.merchantId ?? '';
+    }
     if (req?.contaMerchant) return req.contaMerchant;
     const lojas = await this.contas.ativas();
     if (loja) {

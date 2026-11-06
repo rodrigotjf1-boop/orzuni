@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiKeyGuard } from '../auth/api-key.guard';
+import { AcessoGuard } from '../auth/sessao.guard';
 import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { StoreService } from '../store/store.service';
@@ -7,10 +7,11 @@ import { VigiaPoller } from './vigia.poller';
 
 /**
  * O vigia como serviço: o que está fora do ar e há quanto tempo.
- * MULTI-LOJA: chave ligada → só a loja dela; admin → ?loja=<merchantId> ou TODAS.
+ * MULTI-LOJA: sessão → só as lojas do próprio tenant; chave ligada → só a loja
+ * dela; admin → ?loja=<merchantId> ou TODAS.
  */
 @Controller('vigia')
-@UseGuards(ApiKeyGuard)
+@UseGuards(AcessoGuard)
 export class VigiaController {
   constructor(
     private readonly store: StoreService,
@@ -18,8 +19,12 @@ export class VigiaController {
     private readonly poller: VigiaPoller,
   ) {}
 
-  // resolve as lojas-alvo da requisição (chave ligada / admin com ?loja / todas)
+  // resolve as lojas-alvo da requisição (sessão → só o tenant; chave ligada; admin ?loja / todas)
   private async alvos(req: any, loja?: string): Promise<Array<{ merchantId: string; nome: string }>> {
+    if (req?.acesso === 'sessao') {
+      const minhas = await this.contas.ativasDoTenant(req.usuario.tenant);
+      return loja ? minhas.filter((l) => l.merchantId === loja) : minhas;
+    }
     if (req?.contaMerchant) return [{ merchantId: req.contaMerchant, nome: '' }];
     const lojas = await this.contas.ativas();
     return loja ? lojas.filter((l) => l.merchantId === loja) : lojas;

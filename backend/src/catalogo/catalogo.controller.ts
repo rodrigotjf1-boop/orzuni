@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiKeyGuard } from '../auth/api-key.guard';
+import { AcessoGuard } from '../auth/sessao.guard';
 import { Requer } from '../auth/requer.decorator';
 import { ContaService } from '../conta/conta.service';
 import { CatalogoService } from './catalogo.service';
@@ -10,13 +10,14 @@ import type { DadosItem, DadosPizza, DadosCombo, Shift } from './validacao';
  * Tudo casa por código de PDV. Base: /v1
  *
  * MULTI-LOJA: a loja é resolvida por requisição:
+ *  0) SESSÃO de usuário → só as lojas do PRÓPRIO tenant (?loja= só entre as dele);
  *  1) chave de API ligada a uma loja → usa a dela (sem param, IDOR-proof);
  *  2) admin com ?loja=<merchantId> → aquela loja;
  *  3) senão → a única/primeira loja ativa.
- * NUNCA aceita merchantId arbitrário fora dessas regras.
+ * NUNCA aceita merchantId arbitrário fora dessas regras (nem a loja de outro tenant).
  */
 @Controller()
-@UseGuards(ApiKeyGuard)
+@UseGuards(AcessoGuard)
 export class CatalogoController {
   constructor(
     private readonly catalogo: CatalogoService,
@@ -24,6 +25,12 @@ export class CatalogoController {
   ) {}
 
   private async merchant(req: any, loja?: string): Promise<string> {
+    if (req?.acesso === 'sessao') {
+      // usuário logado: só as lojas do PRÓPRIO tenant; ?loja= só se for dele (anti-IDOR).
+      const minhas = await this.contas.ativasDoTenant(req.usuario.tenant);
+      if (loja) return minhas.find((x) => x.merchantId === loja)?.merchantId ?? '';
+      return minhas[0]?.merchantId ?? '';
+    }
     if (req?.contaMerchant) return req.contaMerchant; // chave ligada a uma loja
     const lojas = await this.contas.ativas();
     if (loja) {
