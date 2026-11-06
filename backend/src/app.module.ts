@@ -13,6 +13,7 @@ import { UsuarioModule } from './usuario/usuario.module';
 import { TelemetriaModule } from './telemetria/telemetria.module';
 import { HubModule } from './hub/hub.module';
 import { McpModule } from './mcp/mcp.module';
+import { ImportacaoModule } from './importacao/importacao.module';
 
 /**
  * orzuni-api — monólito com o poller do vigia DENTRO da API (@nestjs/schedule).
@@ -33,6 +34,7 @@ import { McpModule } from './mcp/mcp.module';
     LojaModule,
     HubModule,
     McpModule,
+    ImportacaoModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

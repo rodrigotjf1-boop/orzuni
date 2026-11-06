@@ -12,6 +12,7 @@ const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
   { href: '/loja', label: 'Loja', icon: 'loja' },
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
+  { href: '/importar', label: 'Importar do Regem', icon: 'importar' },
   { href: '/conectar', label: 'Conectar iFood', icon: 'conectar' },
 ];
 
@@ -52,6 +53,12 @@ function Icon({ name }: { name: string }) {
     return (
       <svg viewBox="0 0 24 24">
         <path d="M4 9l1-4h14l1 4M5 9v10h14V9M5 9h14M12 12v4M10 14h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (name === 'importar')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M12 3v10m0 0l-4-4m4 4l4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   return (
