@@ -114,7 +114,7 @@ export default function LojaPage() {
         <button className="btn ghost" onClick={carregarPainel}>Atualizar status</button>
       </div>
 
-      {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
+      {erro && <div className="errbox">Não consegui carregar os dados da loja agora: {erro}</div>}
       {!painel && !erro && <div className="loading">Carregando…</div>}
 
       {/* LOJAS VINCULADAS (GET /merchants) */}

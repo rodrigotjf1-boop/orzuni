@@ -232,7 +232,7 @@ export default function CardapioPage() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
-            placeholder="Buscar item ou PDV…"
+            placeholder="Buscar item ou código…"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             style={{ background: 'var(--ink2)', border: '1px solid var(--line)', borderRadius: 11, color: 'var(--cream)', fontFamily: 'inherit', fontSize: '.9rem', padding: '11px 14px', minWidth: 180 }}
@@ -351,7 +351,7 @@ export default function CardapioPage() {
         </div>
       )}
 
-      {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
+      {erro && <div className="errbox">Não consegui carregar o cardápio agora: {erro}</div>}
       {!itens && !erro && <div className="loading">Carregando cardápio…</div>}
 
       {categorias.map((cat) => (
@@ -383,7 +383,7 @@ export default function CardapioPage() {
                       ) : (
                         <div style={{ fontWeight: 600 }}>{it.nome}</div>
                       )}
-                      <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>PDV {it.pdv ?? '—'}</div>
+                      <div className="mono" style={{ color: 'var(--dim)', fontSize: '.62rem', textTransform: 'none', marginTop: 2 }}>Código {it.pdv ?? '—'}</div>
                     </div>
 
                     {/* preço — caixa clicável: cinza/neutra fechada, branca ao editar; salva ao sair (blur) ou Enter */}
