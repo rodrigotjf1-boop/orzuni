@@ -378,17 +378,23 @@
       "escrita": "chave"
     },
     {
-      "nome": "complemento_pausar",
-      "descricao": "Pausa uma opção (complemento) no iFood, pelo id da opção. Cascateia para todos os itens do grupo.",
-      "permissao": "status.escrever",
+      "nome": "complemento_preco_definir",
+      "descricao": "Muda o preço de uma opção de complemento no iFood pelo código de PDV (vale para TODAS as opções com esse código, em todos os grupos). O valor vai em reais. A resposta lista cada opção (grupo, optionId, antes → depois).",
+      "permissao": "preco.escrever",
       "esquemaEntrada": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "opcao_id": {
+          "codigo_pdv": {
             "type": "string",
             "minLength": 1,
-            "description": "O id da opção no iFood (veja complementos_listar)."
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "valor": {
+            "type": "number",
+            "minimum": 0,
+            "description": "O preço em reais (pode ser 0 para complemento grátis)."
           },
           "chaveIdempotencia": {
             "type": "string",
@@ -398,7 +404,41 @@
           }
         },
         "required": [
-          "opcao_id",
+          "codigo_pdv",
+          "valor",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "complemento_pausar",
+      "descricao": "Pausa uma opção (complemento) no iFood, pelo código de PDV (todas as opções com o código) ou pelo id da opção. Cascateia para todos os itens do grupo.",
+      "permissao": "status.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "description": "O código de PDV da opção: atinge TODAS as opções com esse código, em todos os grupos.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "opcao_id": {
+            "description": "O id de UMA opção no iFood (veja complementos_listar). Alternativa ao codigo_pdv.",
+            "type": "string",
+            "minLength": 1
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
           "chaveIdempotencia"
         ],
         "additionalProperties": false
@@ -407,16 +447,22 @@
     },
     {
       "nome": "complemento_reativar",
-      "descricao": "Reativa uma opção (complemento) no iFood, pelo id da opção.",
+      "descricao": "Reativa uma opção (complemento) no iFood, pelo código de PDV (todas as opções com o código) ou pelo id da opção.",
       "permissao": "status.escrever",
       "esquemaEntrada": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "opcao_id": {
+          "codigo_pdv": {
+            "description": "O código de PDV da opção: atinge TODAS as opções com esse código, em todos os grupos.",
             "type": "string",
             "minLength": 1,
-            "description": "O id da opção no iFood."
+            "maxLength": 100
+          },
+          "opcao_id": {
+            "description": "O id de UMA opção no iFood (veja complementos_listar). Alternativa ao codigo_pdv.",
+            "type": "string",
+            "minLength": 1
           },
           "chaveIdempotencia": {
             "type": "string",
@@ -426,7 +472,6 @@
           }
         },
         "required": [
-          "opcao_id",
           "chaveIdempotencia"
         ],
         "additionalProperties": false

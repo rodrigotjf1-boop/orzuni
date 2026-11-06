@@ -59,13 +59,27 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 ### Escrita (com `chaveIdempotencia`)
 | Tool | Permissão | Rota REST traduzida | Argumentos |
 |---|---|---|---|
-| `preco_definir`       | `preco.escrever`  | PATCH `/itens/{pdv}/preco`  | `{ codigo_pdv, valor, valor_de?, chaveIdempotencia }` |
-| `precos_em_massa`     | `preco.escrever`  | PATCH `/precos`             | `{ itens:[{codigo_pdv,valor,valor_de?}], contexto?, chaveIdempotencia }` (assíncrono → `batchId`) |
+| `preco_definir`       | `preco.escrever`  | PATCH `/itens/{pdv}/preco`  | `{ codigo_pdv, valor, chaveIdempotencia }` — a promo "de/por" atual é **sempre preservada** (não há `valor_de`) |
+| `precos_em_massa`     | `preco.escrever`  | PATCH `/precos`             | `{ itens:[{codigo_pdv,valor,manter_promo?}], contexto?, chaveIdempotencia }` (assíncrono → `batchId`; `manter_promo` padrão `true`) |
 | `item_pausar`         | `status.escrever` | PATCH `/itens/{pdv}/status` | `{ codigo_pdv, chaveIdempotencia }` → UNAVAILABLE |
 | `item_reativar`       | `status.escrever` | PATCH `/itens/{pdv}/status` | `{ codigo_pdv, chaveIdempotencia }` → AVAILABLE |
-| `complemento_pausar`  | `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ opcao_id, chaveIdempotencia }` |
-| `complemento_reativar`| `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ opcao_id, chaveIdempotencia }` |
+| `complemento_preco_definir` | `preco.escrever` | PATCH `/complementos/opcao/{id}/preco` (todas com o código) | `{ codigo_pdv, valor, chaveIdempotencia }` — **1 preço por código de PDV → todas as opções com esse código, em todos os grupos** |
+| `complemento_pausar`  | `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
+| `complemento_reativar`| `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
 | `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA, não um item) |
+
+### Envelope de resposta das escritas (`structuredContent`)
+Toda escrita devolve, em `structuredContent`, o que a porta FEZ (o `content` texto carrega o mesmo JSON):
+- `situacao`: `aplicado` · `sem_mudanca` · `nao_encontrado` · `parcial` · `recusado`.
+- `repetido`: `true` quando a resposta veio da MESMA `chaveIdempotencia` (não gravou de novo).
+- `antes` / `depois`: o preço antes e depois (nas tools de preço de item).
+- `opcoes`: `[{ grupo, optionId, antes?, depois?, situacao }]` — cada opção tocada por `complemento_preco_definir`/`_pausar`/`_reativar` por código de PDV, inclusive as `sem_mudanca`.
+- `dados`: extras da tool (ex.: `batchId`, `lote_assincrono`, `ignorados` em `precos_em_massa`).
+- Recusa (`situacao` `nao_encontrado`/`recusado` → também `isError: true`): `codigo` distinto + `pode_repetir`.
+  Códigos: `pdv_inexistente` (não repetir) · `ifood_indisponivel` (**pode repetir**) · `dados_invalidos` ·
+  `conflito` · `erro_ifood` · `erro_interno` (pode repetir) · `chave_reutilizada` (chaveIdempotencia reusada com outro pedido).
+- "Loja fechada/desligada" **não** é um código de tool: a loja revogada no Orzuni dá **403 `conta-bloqueada`**
+  no portão (antes da tool); a situação de abertura é consultada por `loja_status_ler`.
 
 ## Decisões consolidadas (material do HubDMS, 04/11)
 - **Endereço FIXADO:** porta `/v1/mcp`, recurso/`aud` `https://api.orzuni.com/v1/mcp`, metadados
@@ -87,16 +101,26 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 - **No hub, nada agora** (dono): o endereço do Orzuni entra em `HUB_PORTAS`/`HUB_RECURSOS` no próximo PR do
   hub, depois do manifesto passar no kit contra a produção.
 
-## Questão ainda aberta
-- **Complemento por código de PDV.** Hoje o Orzuni reprecifica opção só por `optionId` do iFood
-  (`/complementos/opcao/:id/preco`); produtos vão por `externalCode` (`/precos`). O caso de uso do Regem quer
-  preço de complemento por canal ligando por **código de PDV**. No O1 investigo (a) resolver `optionId` pelo
-  código de PDV da opção, ou (b) `externalCode` em opção se o iFood aceitar. Até lá, as tools de complemento
-  ficam só com pausar/reativar (sem `complemento_preco_definir`).
+## Complemento por código de PDV — RESOLVIDO no O4 (05/11)
+Via **(a)**: a porta resolve `codigo_pdv → todas as opções com esse externalCode` (varrendo os grupos,
+`complementos()`) e aplica a cada `optionId` (`patchOptionPrice` / `setOptionStatus`, síncronos). A regra do
+Regem — **1 preço por código de PDV vale para todas as opções com o código, em todos os grupos** — fica DO
+LADO DA PORTA (o id não envelhece no Regem). A resposta lista cada opção (grupo, optionId, antes → depois).
+⚠️ Opções cujo código no iFood é gerado pelo Orzuni (`ORZ-*`) vêm com `pdv` vazio em `complementos_listar` e
+**não são ligáveis por código** — isso é material da conciliação (R3).
+
+## Saída das leituras (para o R3 do Regem)
+- `cardapio_listar` → `{ itens: [{ pdv, nome, categoria, preco, promo:{de}|null, status:'no_ar'|'pausado', imagem }] }` (lista inteira, **sem paginação**).
+- `complementos_listar` → `{ grupos: [{ id, nome, tipo, min, max, opcoes:[{ id(=optionId), nome, preco, status, pdv, imagem }], itens:[{ nome, pdv }] }] }` (sem paginação).
+- `item_ler` → detalhe do item + `complementos:[{ grupo, obrigatorio, min, max, opcoes:[{ nome, status, preco, pdv, imagem }] }]`.
+- `contexto`: `DEFAULT` (o padrão que o Regem usa), mais `INDOOR`/`WHITELABEL` quando a loja tiver.
+- **Limite:** 120 chamadas/min por ligação; estouro → 429 `limite-de-chamadas` com `Retry-After`.
 
 ## Plano de PRs (lado Orzuni)
-- **O1** — módulo `mcp/`: `POST /v1/mcp` roteando `tools/call` → os services que já existem
-  (`CatalogoService`, `VigiaService`, `LojaService`); `tools/list` só mostra o que a credencial pode;
-  metadados + manifesto (`montarManifesto`). Nasce DESLIGADO por flag `ORZUNI_MCP_ATIVO=false`.
-- **O2** — credencial DMS ID (token `aud`=orzuni + `DMS-Ligacao`), 401/403 do Padrão, `ACEITAR_INTEGRACOES=false`.
-- **O3** — passar no kit de conformidade do HubDMS.
+- **O1** — módulo `mcp/`: `POST /v1/mcp` roteando `tools/call` → os services que já existem; `tools/list` só
+  mostra o que a credencial pode; metadados + manifesto. Nasce DESLIGADO por `ORZUNI_MCP_ATIVO=false`. **(#49)**
+- **O2** — credencial DMS ID (token `aud`=orzuni + `DMS-Ligacao`), 401/403 do Padrão, `ACEITAR_INTEGRACOES=false`. **(#49)**
+- **O3** — passar no kit de conformidade do HubDMS. **(#49)**
+- **O4** — complemento por código de PDV (`complemento_preco_definir`; `_pausar`/`_reativar` aceitam
+  `codigo_pdv`) + **envelope `structuredContent`** nas escritas (situação/antes/depois/`repetido`/código). Fecha
+  o R2 do Regem. `lote_ler` do `batchId` fica para depois (o Regem usa `preco_definir` síncrono).
