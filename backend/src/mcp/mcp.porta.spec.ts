@@ -62,7 +62,14 @@ type LigacaoGuardada = { id: string; aplicativo: string; classe: string; escopos
 async function subirPorta() {
   const ligacoes = new Map<string, LigacaoGuardada>();
   let n = 0;
-  const precoItem = jest.fn(async () => ({ ok: true }));
+  const definirPrecoItem = jest.fn(async () => ({ situacao: 'aplicado' as const, antes: 19.9, depois: 29.9 }));
+  const definirPrecoComplementoPorPdv = jest.fn(async () => ({
+    situacao: 'aplicado' as const,
+    opcoes: [
+      { grupo: 'Adicionais', optionId: 'o1', antes: 2, depois: 3, situacao: 'aplicado' as const },
+      { grupo: 'Extras', optionId: 'o2', antes: 3, depois: 3, situacao: 'sem_mudanca' as const },
+    ],
+  }));
   const cardapio = jest.fn(async (merchant: string) => [{ merchant }]);
   const autenticarLigacao = jest.fn(async (segredo: string | null, doToken: { aplicativo: string; permissoes: string[] }, aplicativos: Record<string, string>): Promise<IntegracaoAutenticada> => {
     const g = segredo ? ligacoes.get(segredo) : undefined;
@@ -88,7 +95,21 @@ async function subirPorta() {
       IntegracaoGuard,
       DmsIdService,
       { provide: LigacaoService, useValue: { autenticarLigacao, trocarPorLigacao: jest.fn(), revogarPeloProprio: jest.fn() } },
-      { provide: CatalogoService, useValue: { cardapio, categorias: jest.fn(async () => []), detalhe: jest.fn(async () => ({})), complementos: jest.fn(async () => []), precoItem, reprecificar: jest.fn(async () => ({ batchId: 'b' })), statusItem: jest.fn(async () => ({})), statusOpcao: jest.fn(async () => ({})) } },
+      {
+        provide: CatalogoService,
+        useValue: {
+          cardapio,
+          categorias: jest.fn(async () => []),
+          detalhe: jest.fn(async () => ({})),
+          complementos: jest.fn(async () => []),
+          definirPrecoItem,
+          definirStatusItem: jest.fn(async () => ({ situacao: 'aplicado' })),
+          definirStatusOpcao: jest.fn(async () => ({ situacao: 'aplicado' })),
+          definirPrecoComplementoPorPdv,
+          definirStatusComplementoPorPdv: jest.fn(async () => ({ situacao: 'aplicado', opcoes: [] })),
+          reprecificar: jest.fn(async () => ({ batchId: 'b', ignorados: [] })),
+        },
+      },
       { provide: LojaService, useValue: { painel: jest.fn(async () => ({})), horarios: jest.fn(async () => ({})), criarInterrupcao: jest.fn(async () => ({})) } },
       { provide: StoreService, useValue: { listarAlertas: jest.fn(async () => []) } },
     ],
@@ -106,7 +127,8 @@ async function subirPorta() {
   return {
     app,
     origem,
-    precoItem,
+    definirPrecoItem,
+    definirPrecoComplementoPorPdv,
     cardapio,
     ligacao(escopos: string[], merchantId: string) {
       const { chave } = gerarChave('lg', 'orzuni');
@@ -161,12 +183,24 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     const token = dmsId.emitir();
     const um = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 29.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(um.corpo.result.isError).toBeUndefined();
+    expect(um.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', antes: 19.9, depois: 29.9, repetido: false });
     const dois = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 29.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(dois.corpo.result.isError).toBeUndefined();
-    expect(p.precoItem).toHaveBeenCalledTimes(1);
+    expect(dois.corpo.result.structuredContent.repetido).toBe(true);
+    expect(p.definirPrecoItem).toHaveBeenCalledTimes(1);
     const outro = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 39.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(outro.corpo.result.isError).toBe(true);
-    expect(p.precoItem).toHaveBeenCalledTimes(1);
+    expect(outro.corpo.result.structuredContent).toMatchObject({ codigo: 'chave_reutilizada' });
+    expect(p.definirPrecoItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('complemento_preco_definir atinge as opções pelo código de PDV e devolve cada uma no envelope', async () => {
+    const ligacao = p.ligacao(['preco.escrever'], 'm1');
+    const r = await chamar(p.origem, dmsId.emitir(), ligacao, 'tools/call', 'complemento_preco_definir', { codigo_pdv: 'ADD-BACON', valor: 3, chaveIdempotencia: 'chave-compl-1' });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.definirPrecoComplementoPorPdv).toHaveBeenCalledWith('m1', 'ADD-BACON', 3);
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', repetido: false });
+    expect(r.corpo.result.structuredContent.opcoes).toHaveLength(2);
   });
 
   it('cada ligação chama o serviço com a SUA loja (isolamento)', async () => {

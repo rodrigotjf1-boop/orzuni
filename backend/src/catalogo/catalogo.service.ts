@@ -14,6 +14,7 @@ import {
   type DadosItem,
   type DadosPizza,
   type DadosCombo,
+  type ErroIfood,
   type Shift,
 } from './validacao';
 
@@ -29,6 +30,23 @@ export interface ItemDetalhe {
   imagem: string; // URL da foto atual (imagePath do iFood), '' se não tiver
   complementos: Array<{ grupo: string; obrigatorio: boolean; min: number; max: number; opcoes: Array<{ nome: string; status: string; preco: number; pdv: string; imagem: string }> }>;
   disponibilidade: Shift[];
+}
+
+/**
+ * O resultado de uma escrita (preço/status) para a porta MCP: a porta devolve ao
+ * consumidor a SITUAÇÃO do que foi feito (aplicado | sem_mudanca | nao_encontrado |
+ * parcial | recusado), o antes/depois e, na recusa, um código distinto + se dá para
+ * repetir. `opcoes` detalha cada opção de complemento tocada por um código de PDV.
+ */
+export interface ResultadoEscrita {
+  situacao: 'aplicado' | 'sem_mudanca' | 'nao_encontrado' | 'parcial' | 'recusado';
+  antes?: number;
+  depois?: number;
+  opcoes?: Array<{ grupo: string; optionId: string; antes?: number; depois?: number; situacao: 'aplicado' | 'sem_mudanca' | 'recusado' }>;
+  dados?: Record<string, unknown>;
+  codigo?: string;
+  pode_repetir?: boolean;
+  erro?: string;
 }
 
 /** Item no formato CANÔNICO do Orzuni (não fala "iFood" por fora). */
@@ -1188,6 +1206,119 @@ export class CatalogoService {
       }
     }
     return { ok: true };
+  }
+
+  // ---- porta MCP: escritas com resultado detalhado (antes/depois/situação) ----
+
+  /** Traduz a recusa do iFood para o código do envelope da porta + se dá para repetir. */
+  private recusaIfood(status: number, data: unknown): { codigo: string; pode_repetir: boolean; erro: string } {
+    const e: ErroIfood = mapErroIfood(status, data);
+    const mapa: Record<ErroIfood['codigo'], { codigo: string; pode_repetir: boolean }> = {
+      NOT_FOUND: { codigo: 'pdv_inexistente', pode_repetir: false },
+      SERVER_ERROR: { codigo: 'ifood_indisponivel', pode_repetir: true },
+      VALIDATION_ERROR: { codigo: 'dados_invalidos', pode_repetir: false },
+      CONFLICT: { codigo: 'conflito', pode_repetir: false },
+      UNKNOWN: { codigo: 'erro_ifood', pode_repetir: false },
+    };
+    return { ...mapa[e.codigo], erro: e.mensagem };
+  }
+
+  /** Define o preço de UM item por PDV; devolve antes/depois e a situação (sem_mudanca se já era o valor). */
+  async definirPrecoItem(merchantId: string, pdv: string, valor: number): Promise<ResultadoEscrita> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhum item com esse código de PDV no iFood.' };
+    const ctx = ref.item.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
+    const atual = ctx?.price ?? ref.item.price;
+    const antes = atual?.value ?? 0;
+    if (antes === valor) return { situacao: 'sem_mudanca', antes, depois: valor };
+    const r = await this.ifood.patchItemPrice(merchantId, ref.itemId, valor, atual?.originalValue);
+    if (r.status >= 200 && r.status < 300) return { situacao: 'aplicado', antes, depois: valor };
+    return { situacao: 'recusado', antes, ...this.recusaIfood(r.status, r.data) };
+  }
+
+  /** Pausa/reativa UM item por PDV; sem_mudanca se já estava no estado pedido. */
+  async definirStatusItem(merchantId: string, pdv: string, status: 'no_ar' | 'pausado'): Promise<ResultadoEscrita> {
+    const ref = await this.resolver(merchantId, pdv);
+    if (!ref) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhum item com esse código de PDV no iFood.' };
+    if ((this.noAr(ref.item) ? 'no_ar' : 'pausado') === status) return { situacao: 'sem_mudanca' };
+    const ok = await this.ifood.setItemStatus(merchantId, ref.itemId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
+    return ok ? { situacao: 'aplicado' } : { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui alterar o status do item no iFood.' };
+  }
+
+  /** Pausa/reativa UMA opção pelo id (sem saber o estado anterior — cascateia a todos os itens do grupo). */
+  async definirStatusOpcao(merchantId: string, optionId: string, status: 'no_ar' | 'pausado'): Promise<ResultadoEscrita> {
+    const ok = await this.ifood.setOptionStatus(merchantId, optionId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
+    return ok ? { situacao: 'aplicado' } : { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui atualizar a opção no iFood.' };
+  }
+
+  /** Todas as opções (em qualquer grupo) que carregam um dado código de PDV. */
+  private async opcoesPorPdv(merchantId: string, codigoPdv: string): Promise<Array<{ grupo: string; optionId: string; preco: number; status: string }>> {
+    const grupos = await this.complementos(merchantId);
+    const alvos: Array<{ grupo: string; optionId: string; preco: number; status: string }> = [];
+    for (const g of grupos) for (const o of g.opcoes) if (o.pdv && o.pdv === codigoPdv) alvos.push({ grupo: g.nome, optionId: o.id, preco: o.preco, status: o.status });
+    return alvos;
+  }
+
+  /** Consolida o resultado de N opções numa só situação global. */
+  private consolidar(
+    opcoes: NonNullable<ResultadoEscrita['opcoes']>,
+    aplicadas: number,
+    falhas: number,
+    recusa: { codigo: string; pode_repetir: boolean; erro: string } | null,
+  ): ResultadoEscrita {
+    if (falhas === 0) return { situacao: aplicadas > 0 ? 'aplicado' : 'sem_mudanca', opcoes };
+    if (aplicadas === 0) return { situacao: 'recusado', opcoes, ...(recusa ?? { codigo: 'erro_ifood', pode_repetir: false, erro: 'Falha ao aplicar.' }) };
+    return { situacao: 'parcial', opcoes, ...(recusa ?? {}) };
+  }
+
+  /** Define o preço de TODAS as opções com um código de PDV (regra do Regem: 1 preço iFood por código). */
+  async definirPrecoComplementoPorPdv(merchantId: string, codigoPdv: string, valor: number): Promise<ResultadoEscrita> {
+    const alvos = await this.opcoesPorPdv(merchantId, codigoPdv);
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhuma opção de complemento com esse código de PDV no iFood.' };
+    const opcoes: NonNullable<ResultadoEscrita['opcoes']> = [];
+    let aplicadas = 0;
+    let falhas = 0;
+    let recusa: { codigo: string; pode_repetir: boolean; erro: string } | null = null;
+    for (const a of alvos) {
+      if (a.preco === valor) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, antes: a.preco, depois: valor, situacao: 'sem_mudanca' });
+        continue;
+      }
+      const r = await this.ifood.patchOptionPrice(merchantId, a.optionId, valor);
+      if (r.status >= 200 && r.status < 300) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, antes: a.preco, depois: valor, situacao: 'aplicado' });
+        aplicadas++;
+      } else {
+        recusa = this.recusaIfood(r.status, r.data);
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, antes: a.preco, situacao: 'recusado' });
+        falhas++;
+      }
+    }
+    return this.consolidar(opcoes, aplicadas, falhas, recusa);
+  }
+
+  /** Pausa/reativa TODAS as opções com um código de PDV. */
+  async definirStatusComplementoPorPdv(merchantId: string, codigoPdv: string, status: 'no_ar' | 'pausado'): Promise<ResultadoEscrita> {
+    const alvos = await this.opcoesPorPdv(merchantId, codigoPdv);
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhuma opção de complemento com esse código de PDV no iFood.' };
+    const opcoes: NonNullable<ResultadoEscrita['opcoes']> = [];
+    let aplicadas = 0;
+    let falhas = 0;
+    for (const a of alvos) {
+      if (a.status === status) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'sem_mudanca' });
+        continue;
+      }
+      const ok = await this.ifood.setOptionStatus(merchantId, a.optionId, status === 'no_ar' ? 'AVAILABLE' : 'UNAVAILABLE');
+      if (ok) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'aplicado' });
+        aplicadas++;
+      } else {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'recusado' });
+        falhas++;
+      }
+    }
+    return this.consolidar(opcoes, aplicadas, falhas, falhas ? { codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui atualizar uma ou mais opções no iFood.' } : null);
   }
 
   // resolve o PDV → item (itemId, productId, categoria) varrendo o catálogo

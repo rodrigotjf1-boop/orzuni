@@ -3,12 +3,17 @@
  * chama o MESMO serviço que a tela/REST usa, com o merchant da ligação (a loja
  * nunca vem no argumento — à prova de IDOR). Recusa de regra vira resposta de
  * erro com a frase; erro inesperado sai como "erro interno", com log local.
+ *
+ * As escritas devolvem um ENVELOPE em `structuredContent` (o que a porta FEZ):
+ * `situacao` (aplicado | sem_mudanca | nao_encontrado | parcial | recusado),
+ * `antes`/`depois`, `opcoes` (complemento por código de PDV), `codigo` de recusa
+ * distinto + `pode_repetir`, e `repetido` (se veio da mesma chaveIdempotencia).
  */
 import { HttpException, Logger } from '@nestjs/common';
 import type { McpServer } from '@modelcontextprotocol/server';
 
 import { ErroProblema, impressaoPedido } from '../dms/integracao-dms';
-import type { CatalogoService } from '../catalogo/catalogo.service';
+import type { CatalogoService, ResultadoEscrita } from '../catalogo/catalogo.service';
 import type { LojaService } from '../loja/loja.service';
 import type { StoreService } from '../store/store.service';
 import type { IntegracaoAutenticada } from './ligacao.service';
@@ -36,56 +41,92 @@ export interface Ferramenta {
 /** As marcas de uma ferramenta que só lê. */
 export const LEITURA = { readOnlyHint: true, idempotentHint: true, openWorldHint: false } as const;
 
-/** Resposta de ferramenta com o texto (JSON). */
-export function resposta(dados: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(dados) }] };
+/** Resposta de ferramenta com o texto (JSON) e, opcional, o conteúdo estruturado. */
+export function resposta(dados: unknown, estruturado?: Record<string, unknown>) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(dados) }], ...(estruturado ? { structuredContent: estruturado } : {}) };
 }
 
 /** Resposta de erro: a frase vai para quem chamou, sem derrubar o protocolo. */
-export function erroDaFerramenta(mensagem: string) {
-  return { isError: true as const, content: [{ type: 'text' as const, text: mensagem }] };
+export function erroDaFerramenta(mensagem: string, estruturado?: Record<string, unknown>) {
+  return { isError: true as const, content: [{ type: 'text' as const, text: mensagem }], ...(estruturado ? { structuredContent: estruturado } : {}) };
 }
 
 type RespostaFerramenta = ReturnType<typeof resposta> | ReturnType<typeof erroDaFerramenta>;
 
 const log = new Logger('McpFerramenta');
 
-/** Roda a ferramenta; recusa de regra (<500) vira erro da ferramenta, o resto é "erro interno". */
+/** Recusa de regra (<500) vira erro da ferramenta; o resto é "erro interno". `estruturado` acompanha quando houver. */
+function traduzErro(nome: string, e: unknown, estruturado?: Record<string, unknown>): RespostaFerramenta {
+  if (e instanceof ErroProblema && e.status < 500) return erroDaFerramenta(e.detalhe, estruturado);
+  if (e instanceof HttpException && e.getStatus() < 500) {
+    const corpo = e.getResponse();
+    const m = typeof corpo === 'string' ? corpo : ((corpo as { message?: unknown }).message ?? e.message);
+    return erroDaFerramenta(Array.isArray(m) ? m.join(' ') : String(m), estruturado);
+  }
+  log.error(`${nome} falhou: ${(e as Error)?.message ?? e}`, (e as Error)?.stack);
+  return erroDaFerramenta('Erro interno. Tente de novo em instantes.', estruturado && { ...estruturado, codigo: 'erro_interno', pode_repetir: true });
+}
+
+/** Roda a ferramenta de leitura; recusa de regra vira erro da ferramenta. */
 export async function naConta(nome: string, fn: () => Promise<unknown>): Promise<RespostaFerramenta> {
   try {
     return resposta(await fn());
   } catch (e) {
-    if (e instanceof ErroProblema && e.status < 500) return erroDaFerramenta(e.detalhe);
-    if (e instanceof HttpException && e.getStatus() < 500) {
-      const corpo = e.getResponse();
-      const m = typeof corpo === 'string' ? corpo : ((corpo as { message?: unknown }).message ?? e.message);
-      return erroDaFerramenta(Array.isArray(m) ? m.join(' ') : String(m));
-    }
-    log.error(`${nome} falhou: ${(e as Error)?.message ?? e}`, (e as Error)?.stack);
-    return erroDaFerramenta('Erro interno. Tente de novo em instantes.');
+    return traduzErro(nome, e);
   }
 }
 
 // Idempotência em memória (por processo; basta para o piloto de uma instância).
-const guardadas = new Map<string, { impressao: string; resposta: RespostaFerramenta }>();
+const guardadas = new Map<string, { impressao: string; resultado: ResultadoEscrita }>();
+
+/** As situações que a porta trata como recusa (saem com `isError`). */
+const EH_RECUSA = new Set<ResultadoEscrita['situacao']>(['nao_encontrado', 'recusado']);
+
+/** Monta o `structuredContent` do envelope a partir do resultado do serviço. */
+function envelope(r: ResultadoEscrita, repetido: boolean): Record<string, unknown> {
+  const s: Record<string, unknown> = { situacao: r.situacao, repetido };
+  if (r.antes !== undefined) s.antes = r.antes;
+  if (r.depois !== undefined) s.depois = r.depois;
+  if (r.opcoes) s.opcoes = r.opcoes;
+  if (r.dados) Object.assign(s, r.dados);
+  if (r.codigo) s.codigo = r.codigo;
+  if (r.pode_repetir !== undefined) s.pode_repetir = r.pode_repetir;
+  return s;
+}
+
+/** Resposta da escrita: recusa → `isError` + envelope; sucesso → envelope como texto e `structuredContent`. */
+function montarEscrita(r: ResultadoEscrita, repetido: boolean): RespostaFerramenta {
+  const s = envelope(r, repetido);
+  return EH_RECUSA.has(r.situacao) ? erroDaFerramenta(r.erro ?? 'Não foi possível concluir a ação.', s) : resposta(s, s);
+}
 
 /**
- * Ferramenta que grava: a mesma `chaveIdempotencia` com o MESMO pedido devolve a
- * resposta guardada; com outro pedido, recusa (Padrão §6). Guardado por ligação.
+ * Ferramenta que grava: a mesma `chaveIdempotencia` com o MESMO pedido devolve o
+ * resultado guardado (com `repetido: true`); com outro pedido, recusa (Padrão §6).
+ * Guardado por ligação. A `fn` devolve o resultado detalhado da escrita.
  */
 export async function escrita(
   quem: IntegracaoAutenticada,
   nome: string,
   chaveIdempotencia: string,
   argumentos: unknown,
-  fn: () => Promise<unknown>,
+  fn: () => Promise<ResultadoEscrita>,
 ): Promise<RespostaFerramenta> {
   const impressao = impressaoPedido('TOOL', nome, argumentos);
   const k = `${quem.ligacaoId}:${chaveIdempotencia}`;
   const g = guardadas.get(k);
-  if (g) return g.impressao === impressao ? g.resposta : erroDaFerramenta('Esta chaveIdempotencia já foi usada com outro pedido. Gere outra.');
-  const r = await naConta(nome, fn);
+  if (g) {
+    if (g.impressao !== impressao) return erroDaFerramenta('Esta chaveIdempotencia já foi usada com outro pedido. Gere outra.', { situacao: 'recusado', codigo: 'chave_reutilizada', repetido: false });
+    return montarEscrita(g.resultado, true);
+  }
+  let r: ResultadoEscrita;
+  try {
+    r = await fn();
+  } catch (e) {
+    // falha inesperada não é guardada: pode ser transitória e dar certo na próxima.
+    return traduzErro(nome, e, { situacao: 'recusado', repetido: false });
+  }
   if (guardadas.size > 5000) guardadas.clear();
-  guardadas.set(k, { impressao, resposta: r });
-  return r;
+  guardadas.set(k, { impressao, resultado: r });
+  return montarEscrita(r, false);
 }

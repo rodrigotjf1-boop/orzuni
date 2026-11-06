@@ -9,7 +9,7 @@
  */
 import * as z from 'zod/v4';
 
-import { escrita, type Ferramenta, LEITURA, naConta, resposta } from './mcp.ferramenta';
+import { erroDaFerramenta, escrita, type Ferramenta, LEITURA, naConta, resposta } from './mcp.ferramenta';
 import { LIMITE_POR_MINUTO, PERMISSOES } from './ligacao.regras';
 import type { IntegracaoAutenticada } from './ligacao.service';
 
@@ -163,7 +163,7 @@ const precoDefinir: Ferramenta = {
         inputSchema: z.object({ codigo_pdv: CODIGO_PDV, valor: z.number().positive().describe('O preço em reais.'), chaveIdempotencia: CHAVE_IDEMPOTENCIA }),
       },
       async ({ codigo_pdv, valor, chaveIdempotencia }) =>
-        escrita(c.quem, 'preco_definir', chaveIdempotencia, { codigo_pdv, valor }, () => c.servicos.catalogo.precoItem(c.quem.merchantId, codigo_pdv, valor)),
+        escrita(c.quem, 'preco_definir', chaveIdempotencia, { codigo_pdv, valor }, () => c.servicos.catalogo.definirPrecoItem(c.quem.merchantId, codigo_pdv, valor)),
     );
   },
 };
@@ -184,13 +184,17 @@ const precosEmMassa: Ferramenta = {
         }),
       },
       async ({ itens, contexto, chaveIdempotencia }) =>
-        escrita(c.quem, 'precos_em_massa', chaveIdempotencia, { itens, contexto }, () =>
-          c.servicos.catalogo.reprecificar(
+        escrita(c.quem, 'precos_em_massa', chaveIdempotencia, { itens, contexto }, async () => {
+          const r = await c.servicos.catalogo.reprecificar(
             c.quem.merchantId,
             itens.map((i) => ({ pdv: i.codigo_pdv, preco: i.valor, manterPromo: i.manter_promo })),
             contexto || 'DEFAULT',
-          ),
-        ),
+          );
+          // o lote é assíncrono no iFood: a porta devolve o batchId; os ignorados são os códigos de PDV sem item.
+          if (!r.batchId)
+            return { situacao: 'nao_encontrado' as const, codigo: 'pdv_inexistente', pode_repetir: false, erro: 'Nenhum dos códigos de PDV existe no iFood.', dados: { ignorados: r.ignorados } };
+          return { situacao: 'aplicado' as const, dados: { batchId: r.batchId, lote_assincrono: true, ignorados: r.ignorados } };
+        }),
     );
   },
 };
@@ -203,7 +207,7 @@ const itemPausar: Ferramenta = {
       'item_pausar',
       { title: 'Pausar um item', description: 'Pausa (tira do ar) UM item no iFood, pelo código de PDV.', inputSchema: z.object({ codigo_pdv: CODIGO_PDV, chaveIdempotencia: CHAVE_IDEMPOTENCIA }) },
       async ({ codigo_pdv, chaveIdempotencia }) =>
-        escrita(c.quem, 'item_pausar', chaveIdempotencia, { codigo_pdv }, () => c.servicos.catalogo.statusItem(c.quem.merchantId, codigo_pdv, 'pausado')),
+        escrita(c.quem, 'item_pausar', chaveIdempotencia, { codigo_pdv }, () => c.servicos.catalogo.definirStatusItem(c.quem.merchantId, codigo_pdv, 'pausado')),
     );
   },
 };
@@ -216,7 +220,40 @@ const itemReativar: Ferramenta = {
       'item_reativar',
       { title: 'Reativar um item', description: 'Reativa (põe no ar) UM item no iFood, pelo código de PDV.', inputSchema: z.object({ codigo_pdv: CODIGO_PDV, chaveIdempotencia: CHAVE_IDEMPOTENCIA }) },
       async ({ codigo_pdv, chaveIdempotencia }) =>
-        escrita(c.quem, 'item_reativar', chaveIdempotencia, { codigo_pdv }, () => c.servicos.catalogo.statusItem(c.quem.merchantId, codigo_pdv, 'no_ar')),
+        escrita(c.quem, 'item_reativar', chaveIdempotencia, { codigo_pdv }, () => c.servicos.catalogo.definirStatusItem(c.quem.merchantId, codigo_pdv, 'no_ar')),
+    );
+  },
+};
+
+// Um complemento é endereçado pelo código de PDV (todas as opções com esse código, em
+// todos os grupos — a regra do Regem) OU, direto, pelo id de UMA opção do iFood.
+// Os dois são opcionais no schema (o SDK monta o JSON Schema do tools/list a partir do
+// shape); a regra "exatamente um" é conferida no handler (`exigirUmAlvo`).
+const ALVO_COMPLEMENTO = z.object({
+  codigo_pdv: z.string().min(1).max(100).optional().describe('O código de PDV da opção: atinge TODAS as opções com esse código, em todos os grupos.'),
+  opcao_id: z.string().min(1).optional().describe('O id de UMA opção no iFood (veja complementos_listar). Alternativa ao codigo_pdv.'),
+  chaveIdempotencia: CHAVE_IDEMPOTENCIA,
+});
+
+/** Erro de envelope quando o alvo do complemento não é exatamente um (codigo_pdv OU opcao_id). */
+function exigirUmAlvo(codigo_pdv?: string, opcao_id?: string) {
+  if ((codigo_pdv ? 1 : 0) + (opcao_id ? 1 : 0) === 1) return null;
+  return erroDaFerramenta('Informe codigo_pdv OU opcao_id (exatamente um).', { situacao: 'recusado', codigo: 'dados_invalidos', repetido: false });
+}
+
+const complementoPrecoDefinir: Ferramenta = {
+  nome: 'complemento_preco_definir',
+  escopo: 'preco.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'complemento_preco_definir',
+      {
+        title: 'Definir o preço de um complemento',
+        description: 'Muda o preço de uma opção de complemento no iFood pelo código de PDV (vale para TODAS as opções com esse código, em todos os grupos). O valor vai em reais. A resposta lista cada opção (grupo, optionId, antes → depois).',
+        inputSchema: z.object({ codigo_pdv: CODIGO_PDV, valor: z.number().nonnegative().describe('O preço em reais (pode ser 0 para complemento grátis).'), chaveIdempotencia: CHAVE_IDEMPOTENCIA }),
+      },
+      async ({ codigo_pdv, valor, chaveIdempotencia }) =>
+        escrita(c.quem, 'complemento_preco_definir', chaveIdempotencia, { codigo_pdv, valor }, () => c.servicos.catalogo.definirPrecoComplementoPorPdv(c.quem.merchantId, codigo_pdv, valor)),
     );
   },
 };
@@ -227,9 +264,14 @@ const complementoPausar: Ferramenta = {
   registrar(servidor, c) {
     servidor.registerTool(
       'complemento_pausar',
-      { title: 'Pausar uma opção de complemento', description: 'Pausa uma opção (complemento) no iFood, pelo id da opção. Cascateia para todos os itens do grupo.', inputSchema: z.object({ opcao_id: z.string().min(1).describe('O id da opção no iFood (veja complementos_listar).'), chaveIdempotencia: CHAVE_IDEMPOTENCIA }) },
-      async ({ opcao_id, chaveIdempotencia }) =>
-        escrita(c.quem, 'complemento_pausar', chaveIdempotencia, { opcao_id }, () => c.servicos.catalogo.statusOpcao(c.quem.merchantId, opcao_id, 'pausado')),
+      { title: 'Pausar uma opção de complemento', description: 'Pausa uma opção (complemento) no iFood, pelo código de PDV (todas as opções com o código) ou pelo id da opção. Cascateia para todos os itens do grupo.', inputSchema: ALVO_COMPLEMENTO },
+      async ({ codigo_pdv, opcao_id, chaveIdempotencia }) =>
+        exigirUmAlvo(codigo_pdv, opcao_id) ??
+        escrita(c.quem, 'complemento_pausar', chaveIdempotencia, { codigo_pdv, opcao_id }, () =>
+          codigo_pdv
+            ? c.servicos.catalogo.definirStatusComplementoPorPdv(c.quem.merchantId, codigo_pdv, 'pausado')
+            : c.servicos.catalogo.definirStatusOpcao(c.quem.merchantId, opcao_id!, 'pausado'),
+        ),
     );
   },
 };
@@ -240,9 +282,14 @@ const complementoReativar: Ferramenta = {
   registrar(servidor, c) {
     servidor.registerTool(
       'complemento_reativar',
-      { title: 'Reativar uma opção de complemento', description: 'Reativa uma opção (complemento) no iFood, pelo id da opção.', inputSchema: z.object({ opcao_id: z.string().min(1).describe('O id da opção no iFood.'), chaveIdempotencia: CHAVE_IDEMPOTENCIA }) },
-      async ({ opcao_id, chaveIdempotencia }) =>
-        escrita(c.quem, 'complemento_reativar', chaveIdempotencia, { opcao_id }, () => c.servicos.catalogo.statusOpcao(c.quem.merchantId, opcao_id, 'no_ar')),
+      { title: 'Reativar uma opção de complemento', description: 'Reativa uma opção (complemento) no iFood, pelo código de PDV (todas as opções com o código) ou pelo id da opção.', inputSchema: ALVO_COMPLEMENTO },
+      async ({ codigo_pdv, opcao_id, chaveIdempotencia }) =>
+        exigirUmAlvo(codigo_pdv, opcao_id) ??
+        escrita(c.quem, 'complemento_reativar', chaveIdempotencia, { codigo_pdv, opcao_id }, () =>
+          codigo_pdv
+            ? c.servicos.catalogo.definirStatusComplementoPorPdv(c.quem.merchantId, codigo_pdv, 'no_ar')
+            : c.servicos.catalogo.definirStatusOpcao(c.quem.merchantId, opcao_id!, 'no_ar'),
+        ),
     );
   },
 };
@@ -264,9 +311,10 @@ const interrupcaoCriar: Ferramenta = {
         }),
       },
       async ({ inicio, fim, descricao, chaveIdempotencia }) =>
-        escrita(c.quem, 'interrupcao_criar', chaveIdempotencia, { inicio, fim, descricao }, () =>
-          c.servicos.loja.criarInterrupcao(c.quem.merchantId, { descricao: descricao ?? 'Pausa', inicio, fim }),
-        ),
+        escrita(c.quem, 'interrupcao_criar', chaveIdempotencia, { inicio, fim, descricao }, async () => {
+          const r = await c.servicos.loja.criarInterrupcao(c.quem.merchantId, { descricao: descricao ?? 'Pausa', inicio, fim });
+          return { situacao: 'aplicado' as const, dados: r && typeof r === 'object' ? (r as Record<string, unknown>) : { resultado: r } };
+        }),
     );
   },
 };
@@ -285,6 +333,7 @@ export const FERRAMENTAS: readonly Ferramenta[] = [
   precosEmMassa,
   itemPausar,
   itemReativar,
+  complementoPrecoDefinir,
   complementoPausar,
   complementoReativar,
   interrupcaoCriar,
