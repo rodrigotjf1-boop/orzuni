@@ -22,6 +22,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // roda em tudo, menos login, a rota de auth e os estáticos
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)'],
+  // roda em tudo, menos as páginas públicas (login, cadastro), a rota de auth e os estáticos
+  matcher: ['/((?!login|cadastro|api/auth|_next/static|_next/image|favicon.ico).*)'],
 };
