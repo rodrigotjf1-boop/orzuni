@@ -5,12 +5,14 @@ import { useEffect, useState } from 'react';
 import { api, lojaAtiva, setLojaAtiva, type Loja } from '@/lib/api';
 import { usePending } from '@/components/pending-changes';
 
+// Navegação do lojista. As telas de administração (API & ERP, Diagnóstico) ficam
+// fora do menu — são do dono da distribuição, acessíveis por URL e liberadas pela
+// lista de administradores no proxy.
 const NAV = [
   { href: '/vigia', label: 'Vigia', icon: 'vigia' },
   { href: '/loja', label: 'Loja', icon: 'loja' },
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
-  { href: '/api-erp', label: 'API & ERP', icon: 'api' },
-  { href: '/diagnostico', label: 'Diagnóstico', icon: 'diag' },
+  { href: '/conectar', label: 'Conectar iFood', icon: 'conectar' },
 ];
 
 function Icon({ name }: { name: string }) {
@@ -46,6 +48,12 @@ function Icon({ name }: { name: string }) {
         <path d="M3 12h4l2 6 4-14 2 8h6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
+  if (name === 'conectar')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M4 9l1-4h14l1 4M5 9v10h14V9M5 9h14M12 12v4M10 14h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   return (
     <svg viewBox="0 0 24 24">
       <path d="M12 2v20M7 6h8a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8" strokeLinecap="round" strokeLinejoin="round" />
@@ -61,9 +69,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [loja, setLoja] = useState<string | null>(null);
 
   useEffect(() => {
-    if (path === '/login') return;
+    if (path === '/login' || path === '/cadastro') return;
     setLoja(lojaAtiva());
-    api.lojas
+    api.minhasLojas
       .listar()
       .then((r) => setLojas(r.lojas))
       .catch(() => {});
@@ -81,8 +89,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const store = lojas.find((l) => l.merchantId === ativaId) ?? lojas[0];
   const lojaConectada = store && store.nome && store.nome !== 'loja' ? store.nome : 'Loja iFood';
 
-  // o login não usa o shell (sem sidebar)
-  if (path === '/login') return <>{children}</>;
+  // login e cadastro não usam o shell (sem sidebar)
+  if (path === '/login' || path === '/cadastro') return <>{children}</>;
 
   function sair() {
     navegar(async () => {
