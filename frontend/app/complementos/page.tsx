@@ -162,7 +162,7 @@ export default function ComplementosPage() {
         </div>
       </div>
 
-      {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
+      {erro && <div className="errbox">Não consegui carregar os complementos agora: {erro}</div>}
       {!grupos && !erro && <div className="loading">Carregando complementos…</div>}
       {grupos && lista.length === 0 && !erro && (
         <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>

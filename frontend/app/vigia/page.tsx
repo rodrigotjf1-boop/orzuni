@@ -120,7 +120,7 @@ export default function VigiaPage() {
         </div>
       </div>
 
-      {erro && <div className="errbox">Não consegui falar com a API: {erro}</div>}
+      {erro && <div className="errbox">Não consegui atualizar o painel agora: {erro}</div>}
       {!alertas && !erro && <div className="loading">Carregando…</div>}
       {alertas && alertas.length === 0 && !erro && (
         <div className="card" style={{ textAlign: 'center', color: 'var(--green)', fontWeight: 800, fontSize: '1.1rem' }}>
@@ -141,7 +141,7 @@ export default function VigiaPage() {
                 <span className={`pill ${m.cls}`}>{m.label}</span>
                 <div style={{ fontWeight: 700, fontSize: '1.15rem', marginTop: 8 }}>{a.nome}</div>
                 <div className="mono" style={{ color: 'var(--dim)', marginTop: 3, letterSpacing: '.05em', textTransform: 'none' }}>
-                  PDV {a.pdv ?? '—'}
+                  Código {a.pdv ?? '—'}
                   {a.grupoAfetado ? ` · grupo “${a.grupoAfetado}” sem opção` : ''}
                 </div>
               </div>

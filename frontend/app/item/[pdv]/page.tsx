@@ -148,7 +148,7 @@ export default function EditorPage() {
             Editar <span>item</span>
           </h1>
           <div className="mono" style={{ color: 'var(--dim)', marginTop: 6, textTransform: 'none', letterSpacing: '.05em' }}>
-            PDV {pdv}
+            Código {pdv}
             {det ? ` · ${det.categoria}` : ''}
           </div>
         </div>
