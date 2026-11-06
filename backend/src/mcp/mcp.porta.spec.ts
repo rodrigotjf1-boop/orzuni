@@ -184,6 +184,9 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     const um = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 29.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(um.corpo.result.isError).toBeUndefined();
     expect(um.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', antes: 19.9, depois: 29.9, repetido: false });
+    // Padrão §6: o texto é a frase pt-BR (resumo), nunca o JSON do envelope.
+    expect(um.corpo.result.content[0].text).toMatch(/Preço alterado de R\$ 19,90 para R\$ 29,90\./);
+    expect(() => JSON.parse(um.corpo.result.content[0].text)).toThrow();
     const dois = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 29.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(dois.corpo.result.isError).toBeUndefined();
     expect(dois.corpo.result.structuredContent.repetido).toBe(true);
@@ -191,6 +194,9 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     const outro = await chamar(p.origem, token, ligacao, 'tools/call', 'preco_definir', { codigo_pdv: 'X1', valor: 39.9, chaveIdempotencia: 'chave-aaa-1' });
     expect(outro.corpo.result.isError).toBe(true);
     expect(outro.corpo.result.structuredContent).toMatchObject({ codigo: 'chave_reutilizada' });
+    // Padrão §6: na recusa o texto é a frase pt-BR, não o JSON (o código fica no structuredContent).
+    expect(outro.corpo.result.content[0].text).toMatch(/chaveIdempotencia/);
+    expect(() => JSON.parse(outro.corpo.result.content[0].text)).toThrow();
     expect(p.definirPrecoItem).toHaveBeenCalledTimes(1);
   });
 
