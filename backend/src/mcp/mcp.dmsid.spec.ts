@@ -7,7 +7,7 @@
  *
  * O primeiro teste roda o kit de conformidade do hub contra a porta.
  */
-import { Module, type INestApplication } from '@nestjs/common';
+import { Module, type INestApplication, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { spawn } from 'node:child_process';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
@@ -32,6 +32,8 @@ import { manifestoDaPorta, PORTA_MCP } from './manifesto';
 import { McpController } from './mcp.controller';
 import { McpServidor } from './mcp.servidor';
 import { ProblemaFilter } from './problema.filter';
+import { HubService } from '../hub/hub.service';
+import { RegistroDaPorta } from '../hub/registro-da-porta.middleware';
 
 const APP_A = 'aplicativo-regem-de-teste';
 const APP_B = 'aplicativo-outro-de-teste';
@@ -94,6 +96,7 @@ async function subirPorta(): Promise<Porta> {
     produto: 'regem',
     classe: l.classe,
     nome: 'regem',
+    prefixo: 'dms_lg_orzuni_teste',
     escopos: permissoes,
   });
   const autenticarLigacao = jest.fn(async (segredo: string | null, doToken: { aplicativo: string; permissoes: string[] }, aplicativos: Record<string, string>) => {
@@ -127,9 +130,15 @@ async function subirPorta(): Promise<Porta> {
       { provide: CatalogoService, useValue: catalogoDub },
       { provide: LojaService, useValue: { painel: jest.fn(async () => ({})), horarios: jest.fn(async () => ({})), criarInterrupcao: jest.fn(async () => ({ ok: true })) } },
       { provide: StoreService, useValue: { listarAlertas: jest.fn(async () => []) } },
+      HubService,
+      RegistroDaPorta,
     ],
   })
-  class PortaDeTeste {}
+  class PortaDeTeste implements NestModule {
+    configure(consumidor: MiddlewareConsumer): void {
+      consumidor.apply(RegistroDaPorta).forRoutes(McpController, DmsIdController);
+    }
+  }
 
   const modulo = await Test.createTestingModule({ imports: [PortaDeTeste] }).compile();
   const app = modulo.createNestApplication({ logger: false });

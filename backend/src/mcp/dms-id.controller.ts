@@ -5,15 +5,20 @@
  * - `POST /v1/dms-id/ligacao` — o atalho F2-3: o Regem manda o token do DMS ID e
  *   uma chave `orz_live_` da conta (`{ "chave_orzuni": "orz_live_…" }`) e recebe
  *   o segredo da ligação.
+ * - `DELETE /v1/dms-id/ligacao` — a ligação desliga a SI mesma: autenticada pela
+ *   própria ligação (token do DMS ID + cabeçalho `DMS-Ligacao`); para de valer na
+ *   chamada seguinte.
  *
- * Desligada (`ORZUNI_MCP_ATIVO`), as duas respondem 404.
+ * Desligada (`ORZUNI_MCP_ATIVO`), todas respondem 404.
  */
-import { Body, Controller, Get, Header, HttpCode, HttpStatus, Post, Req, Res, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, HttpStatus, Post, Req, Res, UseFilters, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { ErroProblema } from '../dms/integracao-dms';
+import { anotarChamada } from '../hub/chamada-atual';
 import { DmsIdService } from './dms-id.service';
+import { IntegracaoGuard, type RequestDeIntegracao } from './integracao.guard';
 import { LigacaoService, type LigacaoEntregue } from './ligacao.service';
 import { bearerDoCabecalho, CAMINHO_DOS_METADADOS, desafioDaRecusa } from './ligacao.regras';
 import { ProblemaFilter } from './problema.filter';
@@ -41,6 +46,7 @@ export class DmsIdController {
   @Header('Cache-Control', 'no-store')
   async trocar(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() corpo: unknown): Promise<LigacaoEntregue> {
     if (!this.dmsId.ligado) throw new ErroProblema('nao-encontrado', DESLIGADA);
+    anotarChamada({ ferramenta: 'dms-id.ligacao', credencial: 'dms_id' });
     const bearer = bearerDoCabecalho(req.headers.authorization);
     try {
       const doToken = await this.dmsId.conferir(bearer);
@@ -51,5 +57,20 @@ export class DmsIdController {
       if (desafio) res.setHeader('WWW-Authenticate', desafio);
       throw erro;
     }
+  }
+
+  /**
+   * A ligação desliga a SI mesma (Padrão: `revogarPeloProprio`). O `IntegracaoGuard`
+   * autentica pela própria ligação (token do DMS ID + `DMS-Ligacao`) — e já devolve
+   * 404 com a porta desligada e 401 se a ligação não vale. Idempotente.
+   */
+  @Delete('dms-id/ligacao')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(IntegracaoGuard)
+  async revogar(@Req() req: RequestDeIntegracao): Promise<{ ok: true; revogada_em: string }> {
+    anotarChamada({ ferramenta: 'dms-id.ligacao', credencial: 'dms_id' });
+    const revogadaEm = await this.ligacoes.revogarPeloProprio(req.integracao!);
+    return { ok: true, revogada_em: revogadaEm.toISOString() };
   }
 }

@@ -7,6 +7,8 @@
 
 ## Endereços
 - Porta MCP: `POST /v1/mcp` (spec **2026-07-28**, sem estado; aceita também a geração 2025 com `initialize`).
+- Ligação (atalho F2-3): `POST /v1/dms-id/ligacao` (token do DMS ID + `{ "chave_orzuni": "orz_live_…" }`) → o segredo da ligação.
+- **Revogar a própria ligação:** `DELETE /v1/dms-id/ligacao`, autenticada pela PRÓPRIA ligação (token do DMS ID + cabeçalho `DMS-Ligacao`). Para de valer na chamada seguinte (a revogada responde 401 `ligacao-invalida`). Idempotente; devolve `{ ok: true, revogada_em }`. Desligada (`ORZUNI_MCP_ATIVO=false`) → 404.
 - Metadados do recurso: `GET /.well-known/oauth-protected-resource/v1/mcp` (RFC 9728; `resource` = o endereço da porta, `authorization_servers` = `["https://id.dmstecnologias.com/oidc"]`).
 - Manifesto público: `GET /.well-known/dms-manifesto` (OpenAPI 3.1 + `x-dms-*`, **sem credencial**).
 - Recurso/`aud` (DMS ID) = `https://api.orzuni.com/v1/mcp` — o MESMO texto na porta, no DMS ID e no `resource` dos metadados (senão a conferência `dmsid-mcp-metadados` do kit falha).
@@ -120,6 +122,20 @@ LADO DA PORTA (o id não envelhece no Regem). A resposta lista cada opção (gru
 - `contexto`: `DEFAULT` (o padrão que o Regem usa), mais `INDOOR`/`WHITELABEL` quando a loja tiver.
 - **Limite:** 120 chamadas/min por ligação; estouro → 429 `limite-de-chamadas` com `Retry-After`.
 
+## Registro e parada no hub (Padrão §10)
+O produto entra no hub pelo `ClienteHub` do pacote comum (`backend/src/hub/`), **desligado por padrão**
+(`HUB_LIGADO=false`): sem ele, nada sai daqui e nada é parado pelo hub.
+- **Registro central:** cada chamada da porta MCP (e a troca/revogação da ligação) é anotada e enviada ao hub em
+  lote — código do pedido, aplicativo, prefixo da ligação, conta, ferramenta (o nome da tool; `dms-id.ligacao` na
+  troca/revogação), credencial `dms_id`, resultado, problema, status e duração. **Nunca o conteúdo** (argumentos,
+  cardápio, preço). Quem abre a chamada é o middleware `RegistroDaPorta`; o código volta no cabeçalho `request-id`.
+- **Parada:** antes de atender, o portão consulta a lista de parada do hub; chamada parada → 503 `integracao-parada`
+  com `Retry-After`. Com o hub desligado, nunca para.
+- **Erro inesperado (5xx):** vai também à lista de erros do hub, com a mensagem já sem dado da loja.
+- **Variáveis (no `orzuni-api`, quem põe é o dono):** `HUB_LIGADO`, `HUB_URL`, `HUB_RECURSO`, `DMS_ID_EMISSOR`,
+  `HUB_APLICATIVO` e `HUB_SEGREDO` (o aplicativo **"Orzuni"** no DMS ID, máquina para máquina, função "Produto no
+  hub" — NÃO o aplicativo do Regem). `ACEITAR_INTEGRACOES` segue sendo a chave própria de emergência, com ou sem o hub.
+
 ## Plano de PRs (lado Orzuni)
 - **O1** — módulo `mcp/`: `POST /v1/mcp` roteando `tools/call` → os services que já existem; `tools/list` só
   mostra o que a credencial pode; metadados + manifesto. Nasce DESLIGADO por `ORZUNI_MCP_ATIVO=false`. **(#49)**
@@ -132,3 +148,6 @@ LADO DA PORTA (o id não envelhece no Regem). A resposta lista cada opção (gru
   motivo), nunca o JSON (que fica só no `structuredContent`); frase de "PDV inexistente" nomeia o código. Para
   o cliente que só guarda o texto na recusa, a frase não corta nem vaza JSON. (A perda do `structuredContent`
   na recusa pelo `ClienteMcp 0.10.0` é correção do lado do HubDMS.)
+- **O6** — entrada no hub (`ClienteHub` do pacote **0.10.1**, módulo `backend/src/hub/`, desligado por
+  `HUB_LIGADO=false`): registro/parada/erro em cada chamada da porta (ver seção acima) + rota
+  `DELETE /v1/dms-id/ligacao` (a ligação revoga a si mesma, para o kit de conformidade). Nasce inerte.

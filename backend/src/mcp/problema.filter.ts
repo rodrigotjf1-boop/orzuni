@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 
 import { corpoProblema, ErroProblema, TIPO_CONTEUDO_PROBLEMA } from '../dms/integracao-dms';
+import { anotarChamada } from '../hub/chamada-atual';
 
 @Catch(ErroProblema)
 export class ProblemaFilter implements ExceptionFilter {
@@ -15,6 +16,8 @@ export class ProblemaFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const res = http.getResponse<Response>();
     const req = http.getRequest<Request>();
+    // O problema do Padrão no registro do hub (quando esta chamada está sendo registrada).
+    anotarChamada({ problema: erro.tipo });
     const requestId = (req.headers['x-request-id'] as string | undefined)?.trim() || randomUUID();
     if (erro.retryAfterSeg) res.setHeader('Retry-After', String(erro.retryAfterSeg));
     res.setHeader('x-request-id', requestId);

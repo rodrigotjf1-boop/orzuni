@@ -11,6 +11,7 @@ import { LojaModule } from './loja/loja.module';
 import { AuthModule } from './auth/auth.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { TelemetriaModule } from './telemetria/telemetria.module';
+import { HubModule } from './hub/hub.module';
 import { McpModule } from './mcp/mcp.module';
 
 /**
@@ -30,6 +31,7 @@ import { McpModule } from './mcp/mcp.module';
     VigiaModule,
     CatalogoModule,
     LojaModule,
+    HubModule,
     McpModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

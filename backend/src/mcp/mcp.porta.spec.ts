@@ -3,7 +3,7 @@
  * a idempotência pelo `chaveIdempotencia`, o isolamento entre lojas e o
  * `tools/list` mostrar só o que a credencial pode usar.
  */
-import { Module, type INestApplication } from '@nestjs/common';
+import { Module, type INestApplication, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -24,6 +24,8 @@ import { PORTA_MCP } from './manifesto';
 import { McpController } from './mcp.controller';
 import { McpServidor } from './mcp.servidor';
 import { ProblemaFilter } from './problema.filter';
+import { HubService } from '../hub/hub.service';
+import { RegistroDaPorta } from '../hub/registro-da-porta.middleware';
 
 const APP_A = 'aplicativo-regem-de-teste';
 
@@ -84,8 +86,14 @@ async function subirPorta() {
       produto: 'regem',
       classe: g!.classe,
       nome: 'regem',
+      prefixo: 'dms_lg_orzuni_teste',
       escopos: permissoesDaLigacao(l!, doToken.permissoes),
     };
+  });
+  // A ligação revoga a si mesma: marca a revogação no mapa, e a próxima autenticação recusa (ligacaoVale).
+  const revogarPeloProprio = jest.fn(async (quem: IntegracaoAutenticada): Promise<Date> => {
+    for (const g of ligacoes.values()) if (g.id === quem.ligacaoId) g.revogadaEm = new Date();
+    return new Date();
   });
 
   @Module({
@@ -94,7 +102,9 @@ async function subirPorta() {
       McpServidor,
       IntegracaoGuard,
       DmsIdService,
-      { provide: LigacaoService, useValue: { autenticarLigacao, trocarPorLigacao: jest.fn(), revogarPeloProprio: jest.fn() } },
+      { provide: LigacaoService, useValue: { autenticarLigacao, trocarPorLigacao: jest.fn(), revogarPeloProprio } },
+      HubService,
+      RegistroDaPorta,
       {
         provide: CatalogoService,
         useValue: {
@@ -114,7 +124,11 @@ async function subirPorta() {
       { provide: StoreService, useValue: { listarAlertas: jest.fn(async () => []) } },
     ],
   })
-  class PortaDeTeste {}
+  class PortaDeTeste implements NestModule {
+    configure(consumidor: MiddlewareConsumer): void {
+      consumidor.apply(RegistroDaPorta).forRoutes(McpController, DmsIdController);
+    }
+  }
 
   const modulo = await Test.createTestingModule({ imports: [PortaDeTeste] }).compile();
   const app: INestApplication = modulo.createNestApplication({ logger: false });
@@ -214,5 +228,21 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     await chamar(p.origem, token, p.ligacao(['catalogo.ler'], 'loja-aaa'), 'tools/call', 'cardapio_listar');
     await chamar(p.origem, token, p.ligacao(['catalogo.ler'], 'loja-bbb'), 'tools/call', 'cardapio_listar');
     expect(p.cardapio.mock.calls.map((c) => c[0])).toEqual(['loja-aaa', 'loja-bbb']);
+  });
+
+  it('a ligação revoga a si mesma (DELETE /dms-id/ligacao) e a revogada não entra na chamada seguinte', async () => {
+    const ligacao = p.ligacao(['catalogo.ler'], 'm1');
+    const token = dmsId.emitir();
+    const antes = await chamar(p.origem, token, ligacao, 'tools/call', 'cardapio_listar');
+    expect(antes.status).toBe(200);
+
+    const del = await fetch(`${p.origem}/v1/dms-id/ligacao`, { method: 'DELETE', headers: { authorization: `Bearer ${token}`, 'DMS-Ligacao': ligacao } });
+    expect(del.status).toBe(200);
+    // O middleware do registro do hub abriu a chamada (cabeçalho request-id), mesmo com o hub desligado.
+    expect(del.headers.get('request-id') ?? '').toMatch(/^orz_/);
+    expect(await del.json()).toMatchObject({ ok: true });
+
+    const depois = await chamar(p.origem, token, ligacao, 'tools/call', 'cardapio_listar');
+    expect(depois.status).toBe(401);
   });
 });
