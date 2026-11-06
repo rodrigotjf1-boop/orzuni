@@ -15,10 +15,13 @@ const campo: React.CSSProperties = {
 };
 
 function Resumo({ r }: { r: ResumoImportacao }) {
+  if (r.nadaMudou) {
+    return <div style={{ fontWeight: 600 }}>Nada mudou no cardápio do Regem desde a última vez — não havia o que criar.</div>;
+  }
   const partes = [
     `${r.criados} ${r.criados === 1 ? 'novo criado' : 'novos criados'}`,
     `${r.jaExistiam} já existiam`,
-    r.semPrecoIfoodOuNoIfood ? `${r.semPrecoIfoodOuNoIfood} sem preço no iFood` : '',
+    r.semPrecoIfoodOuNoIfood ? `${r.semPrecoIfoodOuNoIfood} ainda não vão para o iFood` : '',
     r.semCodigo ? `${r.semCodigo} sem código` : '',
     r.falhas?.length ? `${r.falhas.length} com erro` : '',
   ].filter(Boolean);
@@ -41,11 +44,9 @@ function Resumo({ r }: { r: ResumoImportacao }) {
 export default function ImportarPage() {
   const [carregando, setCarregando] = useState(true);
   const [conectado, setConectado] = useState(false);
-  const [endereco, setEndereco] = useState('');
   const [ultima, setUltima] = useState<string | undefined>();
   const [ultimoResumo, setUltimoResumo] = useState<ResumoImportacao | null>(null);
 
-  const [formEndereco, setFormEndereco] = useState('');
   const [token, setToken] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -57,8 +58,6 @@ export default function ImportarPage() {
     try {
       const s = await api.importarRegem.status();
       setConectado(s.conectado);
-      setEndereco(s.endereco || '');
-      setFormEndereco(s.endereco || '');
       setUltima(s.ultimaImportacao);
       setUltimoResumo((s.ultimoResumo as ResumoImportacao) ?? null);
     } catch {
@@ -77,7 +76,7 @@ export default function ImportarPage() {
     setMsg('');
     setSalvando(true);
     try {
-      const r = await api.importarRegem.conectar(formEndereco.trim(), token.trim());
+      const r = await api.importarRegem.conectar(token.trim());
       if (r.ok) {
         setToken('');
         setMsg(`Conectado ao Regem (${r.produtos ?? 0} itens no cardápio de lá).`);
@@ -100,7 +99,7 @@ export default function ImportarPage() {
       const r = await api.importarRegem.executar();
       if (r.ok && r.resumo) {
         setResultado(r.resumo);
-        setUltimoResumo(r.resumo);
+        if (!r.resumo.nadaMudou) setUltimoResumo(r.resumo);
       } else {
         setMsg(r.erro || 'Não foi possível importar agora.');
       }
@@ -115,7 +114,7 @@ export default function ImportarPage() {
     <div style={{ padding: '28px clamp(16px, 4vw, 40px)', maxWidth: 760, margin: '0 auto' }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4 }}>Importar do Regem</h1>
       <div className="sub" style={{ marginBottom: 24 }}>
-        Traga o cardápio da sua loja do Regem para o iFood. O Orzuni compara pelo código do produto e cria no iFood só o que ainda não existe — o que já está lá não é alterado.
+        Traga o cardápio da sua loja do Regem para o iFood. O Orzuni compara pelo código do produto e cria no iFood só o que ainda não existe — o que já está lá não é alterado. Vão só os produtos que você marcou para o iFood no Regem, com o preço do iFood preenchido.
       </div>
 
       {/* conexão */}
@@ -125,23 +124,22 @@ export default function ImportarPage() {
           <div className="sub">Carregando…</div>
         ) : (
           <form onSubmit={conectar}>
-            {conectado && <div className="sub" style={{ marginBottom: 12 }}>Conectado a <b>{endereco}</b>. Para trocar, informe os dados de novo.</div>}
-            <input
-              type="url"
-              value={formEndereco}
-              onChange={(e) => setFormEndereco(e.target.value)}
-              placeholder="Endereço do seu Regem (ex.: https://sualoja.regem...)"
-              style={campo}
-            />
+            {conectado ? (
+              <div className="sub" style={{ marginBottom: 12 }}>Conectado ao Regem. Para trocar a chave, cole a nova abaixo.</div>
+            ) : (
+              <div className="sub" style={{ marginBottom: 12 }}>
+                No Regem, abra Integrações, gere a chave de integração para o Orzuni e cole aqui. Pronto — não precisa de mais nada.
+              </div>
+            )}
             <input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder={conectado ? 'Nova chave de integração (deixe em branco para manter)' : 'Chave de integração do Regem'}
-              autoComplete="off"
+              placeholder={conectado ? 'Nova chave de integração (cole para trocar)' : 'Chave de integração do Regem'}
+              autoComplete="new-password"
               style={campo}
             />
-            <button className="btn" type="submit" disabled={salvando || !formEndereco.trim() || !token.trim()} style={{ justifyContent: 'center' }}>
+            <button className="btn" type="submit" disabled={salvando || !token.trim()} style={{ justifyContent: 'center' }}>
               {salvando ? 'Conectando…' : conectado ? 'Atualizar conexão' : 'Conectar'}
             </button>
           </form>
