@@ -19,11 +19,11 @@ export class ImportacaoRegemController {
     return this.svc.status(req.usuario.tenant);
   }
 
-  /** Conecta a leitura do Regem (endereço + token). O token é guardado cifrado. */
+  /** Conecta a leitura do Regem (chave de integração). A base é fixa; o token é guardado cifrado. */
   @Post('conectar')
-  async conectar(@Req() req: any, @Body() body: { baseUrl?: string; token?: string }) {
+  async conectar(@Req() req: any, @Body() body: { token?: string }) {
     try {
-      return await this.svc.conectar(req.usuario.tenant, body?.baseUrl ?? '', body?.token ?? '');
+      return await this.svc.conectar(req.usuario.tenant, body?.token ?? '');
     } catch (e) {
       return { ok: false, erro: (e as Error).message };
     }

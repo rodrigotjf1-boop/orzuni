@@ -138,6 +138,7 @@ export interface ResumoImportacao {
   semCodigo: number;
   semPrecoIfoodOuNoIfood: number;
   falhas: Array<{ codigo: string; erro?: string }>;
+  nadaMudou?: boolean;
 }
 
 export const api = {
@@ -261,11 +262,12 @@ export const api = {
       req<{ ok: boolean; erro?: string }>('v1/minhas-lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
   },
   // Importar o cardápio do Regem para o iFood (Fase 1). Isolado por tenant (sessão).
+  // A base do Regem é fixa no servidor; aqui só a chave de integração.
   importarRegem: {
     status: () =>
-      req<{ conectado: boolean; endereco?: string; ultimaImportacao?: string; ultimoResumo?: ResumoImportacao | null }>('v1/importar-regem'),
-    conectar: (baseUrl: string, token: string) =>
-      req<{ ok: boolean; produtos?: number; erro?: string }>('v1/importar-regem/conectar', { method: 'POST', body: JSON.stringify({ baseUrl, token }) }),
+      req<{ conectado: boolean; ultimaImportacao?: string; ultimoResumo?: ResumoImportacao | null }>('v1/importar-regem'),
+    conectar: (token: string) =>
+      req<{ ok: boolean; produtos?: number; erro?: string }>('v1/importar-regem/conectar', { method: 'POST', body: JSON.stringify({ token }) }),
     executar: () => req<{ ok: boolean; resumo?: ResumoImportacao; erro?: string }>('v1/importar-regem/executar', { method: 'POST' }),
   },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }> }) =>
