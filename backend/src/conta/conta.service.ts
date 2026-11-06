@@ -49,6 +49,73 @@ export class ContaService {
     return rows[0]?.id ?? null;
   }
 
+  // ---- multi-tenant (Fase 0): as lojas de UM tenant (o usuário logado) ----
+
+  /** As lojas conectadas DESTE tenant (a conta do usuário logado). Sem fallback global. */
+  async ativasDoTenant(tenant: string): Promise<Conta[]> {
+    if (!this.store.temBanco) return [];
+    try {
+      const rows = await this.store.query(
+        `select id, merchant_id, nome from conta_ifood where tenant_id = $1 and status = 'connected' order by criado_em`,
+        [tenant],
+      );
+      return rows.map((r) => ({ id: r.id, merchantId: r.merchant_id, nome: r.nome ?? 'loja' }));
+    } catch (e: any) {
+      this.logger.warn(`ativasDoTenant falhou: ${e?.message ?? e}`);
+      return [];
+    }
+  }
+
+  /** O tenant que JÁ liga este merchant (connected), ou null. Trava anti-IDOR do conectar. */
+  async tenantDoMerchant(merchantId: string): Promise<string | null> {
+    const rows = await this.store.query(
+      `select tenant_id from conta_ifood where merchant_id = $1 and status = 'connected' limit 1`,
+      [merchantId],
+    );
+    return rows[0]?.tenant_id ?? null;
+  }
+
+  /**
+   * Conecta uma loja AO TENANT do usuário logado (não TENANT_PADRAO). À prova de
+   * IDOR: recusa reivindicar uma loja já conectada a OUTRO tenant.
+   */
+  async adicionarNoTenant(tenant: string, merchantId: string, nome: string): Promise<{ ok: boolean; erro?: string }> {
+    if (!this.store.temBanco) return { ok: false, erro: 'banco indisponível' };
+    const dono = await this.tenantDoMerchant(merchantId);
+    if (dono && dono !== tenant) return { ok: false, erro: 'esta loja já está conectada a outra conta' };
+    try {
+      await this.store.query(
+        `insert into conta_ifood (tenant_id, merchant_id, nome, status) values ($1,$2,$3,'connected')
+         on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected'`,
+        [tenant, merchantId, nome],
+      );
+      return { ok: true };
+    } catch (e: any) {
+      this.logger.warn(`adicionarNoTenant falhou: ${e?.message ?? e}`);
+      return { ok: false, erro: 'não foi possível conectar a loja' };
+    }
+  }
+
+  /**
+   * Lojas autorizadas no iFood ao app do Orzuni que ESTE tenant ainda pode conectar:
+   * tira as que já são minhas e ESCONDE as já reivindicadas por outro tenant (anti-IDOR).
+   * ⚠️ Uma loja autorizada ao app e ainda SEM dono aparece para quem a descobrir —
+   * a verificação de posse real (o usuário autorizou ESSE merchant no iFood) é
+   * material de uma fase seguinte; por ora o conectar é do piloto/dono.
+   */
+  async disponiveisParaTenant(tenant: string): Promise<Array<{ merchantId: string; nome: string }>> {
+    const todas = await this.descobrir();
+    const jaMinhas = new Set((await this.ativasDoTenant(tenant)).map((c) => c.merchantId));
+    const out: Array<{ merchantId: string; nome: string }> = [];
+    for (const m of todas) {
+      if (jaMinhas.has(m.merchantId)) continue;
+      const dono = await this.tenantDoMerchant(m.merchantId);
+      if (dono && dono !== tenant) continue;
+      out.push(m);
+    }
+    return out;
+  }
+
   /** Registra/atualiza uma loja. */
   async adicionar(merchantId: string, nome: string): Promise<boolean> {
     if (!this.store.temBanco) return false;
