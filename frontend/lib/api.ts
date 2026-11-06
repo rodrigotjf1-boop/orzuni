@@ -132,6 +132,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface ResumoImportacao {
+  criados: number;
+  jaExistiam: number;
+  semCodigo: number;
+  semPrecoIfoodOuNoIfood: number;
+  falhas: Array<{ codigo: string; erro?: string }>;
+}
+
 export const api = {
   cardapio: () => req<{ itens: ItemCardapio[] }>('v1/cardapio'),
   alertas: () => req<{ alertas: Alerta[] }>('v1/vigia/alertas'),
@@ -251,6 +259,14 @@ export const api = {
     disponiveis: () => req<{ lojas: Loja[] }>('v1/minhas-lojas/disponiveis'),
     conectar: (merchantId: string, nome: string) =>
       req<{ ok: boolean; erro?: string }>('v1/minhas-lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
+  },
+  // Importar o cardápio do Regem para o iFood (Fase 1). Isolado por tenant (sessão).
+  importarRegem: {
+    status: () =>
+      req<{ conectado: boolean; endereco?: string; ultimaImportacao?: string; ultimoResumo?: ResumoImportacao | null }>('v1/importar-regem'),
+    conectar: (baseUrl: string, token: string) =>
+      req<{ ok: boolean; produtos?: number; erro?: string }>('v1/importar-regem/conectar', { method: 'POST', body: JSON.stringify({ baseUrl, token }) }),
+    executar: () => req<{ ok: boolean; resumo?: ResumoImportacao; erro?: string }>('v1/importar-regem/executar', { method: 'POST' }),
   },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }> }) =>
     req<{ ok: boolean; erros: string[]; pdv?: string }>(`v1/itens/${encodeURIComponent(pdv)}`, {
