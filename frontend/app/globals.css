@@ -357,6 +357,234 @@ h1 span {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* ===== fundo decorativo da tela de login (Regem -> Orzuni -> iFood) ===== */
+.login-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lb-line {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 162, 38, 0.18) 22%, rgba(255, 68, 56, 0.18) 78%, transparent);
+}
+.lb-flow {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--tanger);
+  box-shadow: 0 0 10px 2px rgba(255, 162, 38, 0.6);
+  opacity: 0;
+  animation: lb-flow 5s linear infinite;
+}
+.lb-f2 {
+  animation-delay: 1.6s;
+}
+.lb-f3 {
+  animation-delay: 3.3s;
+}
+@keyframes lb-flow {
+  0% {
+    left: 19%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    left: 81%;
+    opacity: 0;
+  }
+}
+.lb-panel {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(208px, 20vw, 290px);
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(23, 17, 20, 0.42);
+  opacity: 0.6;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.lb-regem {
+  left: clamp(16px, 5vw, 80px);
+  animation: lb-float 9s ease-in-out infinite;
+}
+.lb-ifood {
+  right: clamp(16px, 5vw, 80px);
+  animation: lb-float 9s ease-in-out infinite;
+  animation-delay: -4.5s;
+}
+@keyframes lb-float {
+  0%,
+  100% {
+    transform: translateY(-50%);
+  }
+  50% {
+    transform: translateY(calc(-50% - 9px));
+  }
+}
+.lb-head {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.56rem;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+.lb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.lb-row,
+.lb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lb-name {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 246, 236, 0.12);
+  flex: 1;
+}
+.lb-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: none;
+  background: rgba(255, 246, 236, 0.08);
+  border: 1px solid var(--line);
+}
+.lb-price {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.62rem;
+  color: var(--dim);
+  flex: none;
+}
+.lb-active {
+  border-left: 2px solid var(--tanger);
+  margin-left: -16px;
+  padding-left: 14px;
+  background: linear-gradient(90deg, rgba(255, 162, 38, 0.08), transparent);
+}
+.lb-edit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--cream);
+}
+.lb-v2 {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+}
+.lb-regem .lb-v1,
+.lb-ifood .lb-v1 {
+  animation: lb-a 8s infinite;
+}
+.lb-regem .lb-v2,
+.lb-ifood .lb-v2 {
+  animation: lb-b 8s infinite;
+}
+.lb-ifood .lb-v1,
+.lb-ifood .lb-v2,
+.lb-sync {
+  animation-delay: 1.8s;
+}
+@keyframes lb-a {
+  0%,
+  12% {
+    opacity: 1;
+  }
+  20%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lb-b {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  20%,
+  100% {
+    opacity: 1;
+  }
+}
+.lb-caret {
+  width: 1px;
+  height: 11px;
+  margin-left: 3px;
+  background: var(--tanger);
+  animation: lb-caret 1s steps(1) infinite;
+}
+@keyframes lb-caret {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+.lb-sync {
+  border-radius: 8px;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  animation: lb-pulse 8s infinite;
+}
+@keyframes lb-pulse {
+  0%,
+  12% {
+    box-shadow: none;
+    background: transparent;
+  }
+  20% {
+    box-shadow: inset 0 0 0 1px rgba(76, 217, 100, 0.4);
+    background: rgba(76, 217, 100, 0.1);
+  }
+  46%,
+  100% {
+    box-shadow: none;
+    background: transparent;
+  }
+}
+.lb-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 42% 46% at 50% 50%, rgba(13, 10, 12, 0.96) 0%, rgba(13, 10, 12, 0.72) 34%, rgba(13, 10, 12, 0) 64%);
+}
+@media (max-width: 860px) {
+  .lb-panel,
+  .lb-flow,
+  .lb-line {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

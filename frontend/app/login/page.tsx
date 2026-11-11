@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import FundoLogin from './fundo-login';
 
 const campo: React.CSSProperties = {
   width: '100%',
@@ -47,8 +48,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 20, position: 'relative', zIndex: 1 }}>
-      <form onSubmit={entrar} className="card" style={{ width: 360, maxWidth: '100%', textAlign: 'center' }}>
+    <>
+      <FundoLogin />
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 20, position: 'relative', zIndex: 1 }}>
+      <form onSubmit={entrar} className="card" style={{ width: 360, maxWidth: '100%', textAlign: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', boxShadow: '0 20px 60px -20px rgba(0,0,0,.7)' }}>
         <svg viewBox="0 0 100 100" width={48} height={48} style={{ margin: '4px auto 14px', display: 'block', filter: 'drop-shadow(0 0 10px rgba(255,68,56,.5))' }}>
           <defs>
             <linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">
@@ -91,6 +94,7 @@ export default function LoginPage() {
           </Link>
         </div>
       </form>
-    </div>
+      </div>
+    </>
   );
 }
