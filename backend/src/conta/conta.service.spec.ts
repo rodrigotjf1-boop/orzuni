@@ -44,6 +44,33 @@ describe('ContaService.adicionar (admin) — recusa duplicata em outro tenant', 
   });
 });
 
+describe('ContaService — prova de posse (self-service fechado)', () => {
+  it('disponiveisParaTenant devolve vazio (não expõe loja de ninguém)', async () => {
+    const { svc } = comStore(null);
+    expect(await svc.disponiveisParaTenant('tenant-A')).toEqual([]);
+  });
+
+  it('adicionarNoTenant recusa reivindicar loja SEM dono (sem inserir)', async () => {
+    const { svc, query } = comStore(null);
+    const r = await svc.adicionarNoTenant('tenant-A', 'm1', 'Loja');
+    expect(r).toMatchObject({ ok: false });
+    expect(r.erro).toMatch(/equipe do Orzuni|suporte/);
+    expect(insertFeito(query)).toBe(false);
+  });
+
+  it('adicionarNoTenant recusa loja de OUTRO tenant', async () => {
+    const { svc, query } = comStore('tenant-B');
+    expect((await svc.adicionarNoTenant('tenant-A', 'm1', 'Loja')).ok).toBe(false);
+    expect(insertFeito(query)).toBe(false);
+  });
+
+  it('adicionarNoTenant permite reconectar a PRÓPRIA loja (dono === tenant)', async () => {
+    const { svc, query } = comStore('tenant-A');
+    expect(await svc.adicionarNoTenant('tenant-A', 'm1', 'Loja')).toEqual({ ok: true });
+    expect(insertFeito(query)).toBe(true);
+  });
+});
+
 describe('ContaService.remover (admin) — pelo id da linha', () => {
   it('revoga pela coluna id, nunca por merchant_id', async () => {
     const { svc, query } = comStore(null);
