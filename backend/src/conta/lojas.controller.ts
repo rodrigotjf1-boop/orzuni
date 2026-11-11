@@ -24,9 +24,11 @@ export class LojasController {
   }
 
   @Post()
-  async adicionar(@Body() body: { merchantId: string; nome: string; soIntegracao?: boolean }) {
-    // soIntegracao = loja de teste do kit do hub (não varrida, invisível ao lojista)
-    // recusa (ok:false) um merchant já conectado em outro tenant — evita a duplicata
+  async adicionar(@Body() body: { merchantId: string; nome: string; soIntegracao?: boolean; email?: string }) {
+    // com e-mail → conecta a loja À CONTA DO CLIENTE (ativação pós prova de posse);
+    // sem e-mail → fica na conta da distribuição (TENANT_PADRAO), ex.: loja de teste.
+    // os dois caminhos recusam (ok:false) um merchant já conectado a outro tenant.
+    if (body?.email?.trim()) return this.contas.conectarLojaParaEmail(body.email, body.merchantId, body.nome || 'loja');
     return this.contas.adicionar(body.merchantId, body.nome || 'loja', body?.soIntegracao === true);
   }
 

@@ -41,4 +41,22 @@ describe('LojasController (admin) — loja de teste de integração', () => {
     await c.adicionar({ merchantId: 'm3', nome: 'X', soIntegracao: 'true' as never });
     expect(adicionar).toHaveBeenCalledWith('m3', 'X', false);
   });
+
+  it('com e-mail → conecta à conta do cliente (não ao TENANT_PADRAO)', async () => {
+    const adicionar = jest.fn(async () => ({ ok: true }));
+    const conectarLojaParaEmail = jest.fn(async () => ({ ok: true }));
+    const c = comContas({ adicionar, conectarLojaParaEmail });
+    await c.adicionar({ merchantId: 'm4', nome: 'Loja do cliente', email: 'cliente@loja.com' });
+    expect(conectarLojaParaEmail).toHaveBeenCalledWith('cliente@loja.com', 'm4', 'Loja do cliente');
+    expect(adicionar).not.toHaveBeenCalled();
+  });
+
+  it('e-mail em branco cai no caminho normal (TENANT_PADRAO)', async () => {
+    const adicionar = jest.fn(async () => ({ ok: true }));
+    const conectarLojaParaEmail = jest.fn(async () => ({ ok: true }));
+    const c = comContas({ adicionar, conectarLojaParaEmail });
+    await c.adicionar({ merchantId: 'm5', nome: 'Teste', email: '  ' });
+    expect(conectarLojaParaEmail).not.toHaveBeenCalled();
+    expect(adicionar).toHaveBeenCalledWith('m5', 'Teste', false);
+  });
 });
