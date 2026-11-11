@@ -365,6 +365,61 @@ h1 span {
   overflow: hidden;
   pointer-events: none;
 }
+/* ambiente: aurora que respira */
+.lbg-aura {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(74px);
+  opacity: 0.4;
+}
+.lbg-aura1 {
+  width: 48vw; height: 48vw; left: -10vw; top: -14vh;
+  background: radial-gradient(circle, rgba(255, 68, 56, 0.55), transparent 66%);
+  animation: lbg-aura1 26s ease-in-out infinite;
+}
+.lbg-aura2 {
+  width: 44vw; height: 44vw; right: -12vw; top: 4vh;
+  background: radial-gradient(circle, rgba(255, 162, 38, 0.5), transparent 66%);
+  animation: lbg-aura2 31s ease-in-out infinite;
+}
+.lbg-aura3 {
+  width: 52vw; height: 52vw; left: 28vw; bottom: -28vh;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.42), transparent 66%);
+  animation: lbg-aura3 36s ease-in-out infinite;
+}
+@keyframes lbg-aura1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(6vw, 5vh) scale(1.16); } }
+@keyframes lbg-aura2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-5vw, 7vh) scale(1.1); } }
+@keyframes lbg-aura3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-7vw, -6vh) scale(1.2); } }
+/* ambiente: sistema de órbitas atrás do card (motivo do logo orzuni) */
+.lbg-orbit {
+  position: absolute; left: 50%; top: 50%;
+  width: min(1120px, 94vw); height: min(1120px, 94vw);
+  transform: translate(-50%, -50%);
+}
+.lbg-ring { position: absolute; border-radius: 50%; }
+.lbg-ring-a { inset: 0; border: 1px solid rgba(255, 162, 38, 0.1); }
+.lbg-ring-b { inset: 13%; border: 1px solid rgba(255, 68, 56, 0.08); }
+.lbg-ring-c { inset: 27%; border: 1px dashed rgba(139, 92, 246, 0.09); }
+.lbg-orbiter { position: absolute; inset: 0; border-radius: 50%; }
+.lbg-orbiter-a { animation: lbg-spin 44s linear infinite; }
+.lbg-orbiter-b { inset: 13%; animation: lbg-spin 60s linear infinite reverse; }
+.lbg-orbiter-c { inset: 27%; animation: lbg-spin 34s linear infinite; }
+@keyframes lbg-spin { to { transform: rotate(360deg); } }
+.lbg-planet {
+  position: absolute; top: -5px; left: 50%; margin-left: -5px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--tanger); box-shadow: 0 0 14px 3px rgba(255, 162, 38, 0.6);
+}
+.lbg-planet2 { width: 8px; height: 8px; top: -4px; margin-left: -4px; background: var(--coral); box-shadow: 0 0 14px 3px rgba(255, 68, 56, 0.55); }
+.lbg-planet3 { width: 7px; height: 7px; top: -3.5px; margin-left: -3.5px; background: var(--lilac); box-shadow: 0 0 14px 3px rgba(139, 92, 246, 0.5); }
+/* grão fino premium */
+.lbg-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 .lbg-pipe {
   position: absolute;
   top: 50%;
