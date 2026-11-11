@@ -116,6 +116,11 @@ function fraseEscrita(r: ResultadoEscrita): string {
   if (r.situacao === 'sem_mudanca') return r.antes !== undefined ? `Nada mudou: o preço já era ${emReais(r.antes)}.` : 'Nada mudou: já estava assim.';
   if (r.antes !== undefined && r.depois !== undefined) return `Preço alterado de ${emReais(r.antes)} para ${emReais(r.depois)}.`;
   if (r.dados && 'batchId' in r.dados && r.dados.batchId) return 'Reprecificação em lote enviada ao iFood.';
+  // pausa da LOJA inteira (interrupção)
+  if (r.situacao === 'aplicado' && r.dados) {
+    if ('removida' in r.dados) return r.dados.ja_estava_removida ? 'Essa pausa já não existia no iFood (nada a fazer).' : 'Pausa removida no iFood.';
+    if ('interrupcao_id' in r.dados) return 'Loja pausada no iFood.';
+  }
   return 'Feito.';
 }
 

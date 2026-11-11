@@ -302,19 +302,57 @@ const interrupcaoCriar: Ferramenta = {
       'interrupcao_criar',
       {
         title: 'Pausar a loja (interrupção)',
-        description: 'Cria uma pausa programada da LOJA inteira no iFood (não de um item), com início e fim em ISO 8601.',
+        description:
+          'Cria uma pausa programada da LOJA inteira no iFood (não de um item), com início e fim em ISO 8601 (duração de 1 minuto a 7 dias). A resposta traz o id da pausa (use em interrupcao_remover), início, fim e descrição. Se já houver uma pausa no período, recusa com o código interrupcao_sobreposta e os dados da pausa que já vale.',
         inputSchema: z.object({
           inicio: z.string().describe('Início da pausa, em ISO 8601.'),
           fim: z.string().describe('Fim da pausa, em ISO 8601.'),
-          descricao: z.string().max(200).optional().describe('O motivo da pausa (opcional).'),
+          descricao: z.string().max(200).optional().describe('O motivo da pausa, até 200 letras (opcional).'),
           chaveIdempotencia: CHAVE_IDEMPOTENCIA,
         }),
       },
       async ({ inicio, fim, descricao, chaveIdempotencia }) =>
-        escrita(c.quem, 'interrupcao_criar', chaveIdempotencia, { inicio, fim, descricao }, async () => {
-          const r = await c.servicos.loja.criarInterrupcao(c.quem.merchantId, { descricao: descricao ?? 'Pausa', inicio, fim });
-          return { situacao: 'aplicado' as const, dados: r && typeof r === 'object' ? (r as Record<string, unknown>) : { resultado: r } };
+        escrita(c.quem, 'interrupcao_criar', chaveIdempotencia, { inicio, fim, descricao }, () =>
+          c.servicos.loja.pausarLojaPorta(c.quem.merchantId, { inicio, fim, descricao }),
+        ),
+    );
+  },
+};
+
+const interrupcaoRemover: Ferramenta = {
+  nome: 'interrupcao_remover',
+  escopo: 'loja.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'interrupcao_remover',
+      {
+        title: 'Remover uma pausa da loja',
+        description:
+          'Remove uma pausa (interrupção) da LOJA no iFood pelo id (o que interrupcao_criar devolveu). Use para "reabrir agora". Se a pausa já não existir, responde sucesso mesmo assim (idempotente).',
+        inputSchema: z.object({
+          interrupcao_id: z.string().min(1).max(100).describe('O id da pausa a remover (veja interrupcao_criar ou interrupcoes_listar).'),
+          chaveIdempotencia: CHAVE_IDEMPOTENCIA,
         }),
+      },
+      async ({ interrupcao_id, chaveIdempotencia }) =>
+        escrita(c.quem, 'interrupcao_remover', chaveIdempotencia, { interrupcao_id }, () => c.servicos.loja.removerPausaPorta(c.quem.merchantId, interrupcao_id)),
+    );
+  },
+};
+
+const interrupcoesListar: Ferramenta = {
+  nome: 'interrupcoes_listar',
+  escopo: 'loja.ler',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'interrupcoes_listar',
+      {
+        title: 'Listar as pausas da loja',
+        description: 'As pausas (interrupções) vigentes e futuras da LOJA no iFood, cada uma com id, início, fim e descrição. Use para conferir o que está pausado.',
+        inputSchema: z.object({}),
+        annotations: LEITURA,
+      },
+      async () => naConta('interrupcoes_listar', async () => ({ interrupcoes: await c.servicos.loja.interrupcoes(c.quem.merchantId) })),
     );
   },
 };
@@ -329,6 +367,7 @@ export const FERRAMENTAS: readonly Ferramenta[] = [
   alertasListar,
   lojaStatusLer,
   lojaHorariosLer,
+  interrupcoesListar,
   precoDefinir,
   precosEmMassa,
   itemPausar,
@@ -337,6 +376,7 @@ export const FERRAMENTAS: readonly Ferramenta[] = [
   complementoPausar,
   complementoReativar,
   interrupcaoCriar,
+  interrupcaoRemover,
 ];
 
 /** As ferramentas que uma credencial pode ver e usar. */

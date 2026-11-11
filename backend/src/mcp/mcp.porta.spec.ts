@@ -95,6 +95,10 @@ async function subirPorta() {
     for (const g of ligacoes.values()) if (g.id === quem.ligacaoId) g.revogadaEm = new Date();
     return new Date();
   });
+  // pausa da loja (F5 do Regem): o serviço devolve o envelope pronto; aqui só confirmamos o fio + o escopo.
+  const pausarLojaPorta = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { interrupcao_id: 'int-1', inicio: '2026-11-10T14:00:00Z', fim: '2026-11-10T14:30:00Z', descricao: 'Pico' } }));
+  const removerPausaPorta = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { interrupcao_id: 'int-1', removida: true } }));
+  const interrupcoesLoja = jest.fn(async () => [{ id: 'int-1', descricao: 'Pico', inicio: '2026-11-10T14:00:00Z', fim: '2026-11-10T14:30:00Z' }]);
 
   @Module({
     controllers: [McpController, DmsIdController, ManifestoController],
@@ -120,7 +124,7 @@ async function subirPorta() {
           reprecificar: jest.fn(async () => ({ batchId: 'b', ignorados: [] })),
         },
       },
-      { provide: LojaService, useValue: { painel: jest.fn(async () => ({})), horarios: jest.fn(async () => ({})), criarInterrupcao: jest.fn(async () => ({})) } },
+      { provide: LojaService, useValue: { painel: jest.fn(async () => ({})), horarios: jest.fn(async () => ({})), interrupcoes: interrupcoesLoja, pausarLojaPorta, removerPausaPorta } },
       { provide: StoreService, useValue: { listarAlertas: jest.fn(async () => []) } },
     ],
   })
@@ -144,6 +148,9 @@ async function subirPorta() {
     definirPrecoItem,
     definirPrecoComplementoPorPdv,
     cardapio,
+    pausarLojaPorta,
+    removerPausaPorta,
+    interrupcoesLoja,
     ligacao(escopos: string[], merchantId: string) {
       const { chave } = gerarChave('lg', 'orzuni');
       ligacoes.set(chave, { id: `lig-${(n += 1)}`, aplicativo: APP_A, classe: 'dms', escopos, revogadaEm: null, merchantId });
@@ -228,6 +235,52 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     await chamar(p.origem, token, p.ligacao(['catalogo.ler'], 'loja-aaa'), 'tools/call', 'cardapio_listar');
     await chamar(p.origem, token, p.ligacao(['catalogo.ler'], 'loja-bbb'), 'tools/call', 'cardapio_listar');
     expect(p.cardapio.mock.calls.map((c) => c[0])).toEqual(['loja-aaa', 'loja-bbb']);
+  });
+
+  it('as pausas da loja aparecem no tools/list pelo escopo (ler × escrever)', async () => {
+    const token = dmsId.emitir({ scope: 'loja.ler loja.escrever' });
+    // loja.ler vê interrupcoes_listar (leitura), mas NÃO as de escrever
+    const soLer = await chamar(p.origem, token, p.ligacao(['loja.ler'], 'm1'), 'tools/list');
+    const nomesLer = (soLer.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(nomesLer).toEqual(expect.arrayContaining(['interrupcoes_listar', 'loja_status_ler', 'loja_horarios_ler']));
+    expect(nomesLer).not.toContain('interrupcao_criar');
+    expect(nomesLer).not.toContain('interrupcao_remover');
+    // loja.escrever vê criar e remover
+    const escrever = await chamar(p.origem, token, p.ligacao(['loja.escrever'], 'm1'), 'tools/list');
+    const nomesEscrever = (escrever.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(nomesEscrever).toEqual(expect.arrayContaining(['interrupcao_criar', 'interrupcao_remover']));
+  });
+
+  it('interrupcao_criar pausa a loja e devolve o id/início/fim/descrição; a frase é pt-BR (§6)', async () => {
+    const ligacao = p.ligacao(['loja.escrever'], 'm9');
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'loja.escrever' }), ligacao, 'tools/call', 'interrupcao_criar', {
+      inicio: '2026-11-10T14:00:00Z',
+      fim: '2026-11-10T14:30:00Z',
+      descricao: 'Pico',
+      chaveIdempotencia: 'pausa-m9-1',
+    });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.pausarLojaPorta).toHaveBeenCalledWith('m9', { inicio: '2026-11-10T14:00:00Z', fim: '2026-11-10T14:30:00Z', descricao: 'Pico' });
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', interrupcao_id: 'int-1', repetido: false });
+    expect(r.corpo.result.content[0].text).toMatch(/Loja pausada no iFood\./);
+    expect(() => JSON.parse(r.corpo.result.content[0].text)).toThrow();
+  });
+
+  it('interrupcao_remover tira a pausa pelo id e responde pt-BR', async () => {
+    const ligacao = p.ligacao(['loja.escrever'], 'm9');
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'loja.escrever' }), ligacao, 'tools/call', 'interrupcao_remover', { interrupcao_id: 'int-1', chaveIdempotencia: 'reabrir-m9-1' });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.removerPausaPorta).toHaveBeenCalledWith('m9', 'int-1');
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', interrupcao_id: 'int-1', removida: true });
+    expect(r.corpo.result.content[0].text).toMatch(/Pausa removida no iFood\./);
+  });
+
+  it('interrupcoes_listar devolve as pausas da loja (leitura)', async () => {
+    const ligacao = p.ligacao(['loja.ler'], 'm9');
+    const r = await chamar(p.origem, dmsId.emitir(), ligacao, 'tools/call', 'interrupcoes_listar');
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.interrupcoesLoja).toHaveBeenCalledWith('m9');
+    expect(JSON.parse(r.corpo.result.content[0].text).interrupcoes[0]).toMatchObject({ id: 'int-1', descricao: 'Pico' });
   });
 
   it('a ligação revoga a si mesma (DELETE /dms-id/ligacao) e a revogada não entra na chamada seguinte', async () => {

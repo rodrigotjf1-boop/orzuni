@@ -2,10 +2,10 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Porta de integração do Orzuni",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "A porta MCP que os produtos da DMS ligados à loja usam para ver e mexer no cardápio da loja no iFood: itens, preços, pausas, complementos e os alertas do vigia. Credencial: o token do DMS ID com o segredo da ligação (DMS-Ligacao).",
     "x-dms-produto": "orzuni",
-    "x-dms-pacote": "0.9.0"
+    "x-dms-pacote": "0.10.1"
   },
   "servers": [
     {
@@ -221,6 +221,17 @@
     {
       "nome": "loja_horarios_ler",
       "descricao": "O horário de funcionamento da loja no iFood.",
+      "permissao": "loja.ler",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "nome": "interrupcoes_listar",
+      "descricao": "As pausas (interrupções) vigentes e futuras da LOJA no iFood, cada uma com id, início, fim e descrição. Use para conferir o que está pausado.",
       "permissao": "loja.ler",
       "esquemaEntrada": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -480,7 +491,7 @@
     },
     {
       "nome": "interrupcao_criar",
-      "descricao": "Cria uma pausa programada da LOJA inteira no iFood (não de um item), com início e fim em ISO 8601.",
+      "descricao": "Cria uma pausa programada da LOJA inteira no iFood (não de um item), com início e fim em ISO 8601 (duração de 1 minuto a 7 dias). A resposta traz o id da pausa (use em interrupcao_remover), início, fim e descrição. Se já houver uma pausa no período, recusa com o código interrupcao_sobreposta e os dados da pausa que já vale.",
       "permissao": "loja.escrever",
       "esquemaEntrada": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -495,7 +506,7 @@
             "description": "Fim da pausa, em ISO 8601."
           },
           "descricao": {
-            "description": "O motivo da pausa (opcional).",
+            "description": "O motivo da pausa, até 200 letras (opcional).",
             "type": "string",
             "maxLength": 200
           },
@@ -509,6 +520,35 @@
         "required": [
           "inicio",
           "fim",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "interrupcao_remover",
+      "descricao": "Remove uma pausa (interrupção) da LOJA no iFood pelo id (o que interrupcao_criar devolveu). Use para \"reabrir agora\". Se a pausa já não existir, responde sucesso mesmo assim (idempotente).",
+      "permissao": "loja.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interrupcao_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O id da pausa a remover (veja interrupcao_criar ou interrupcoes_listar)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "interrupcao_id",
           "chaveIdempotencia"
         ],
         "additionalProperties": false
