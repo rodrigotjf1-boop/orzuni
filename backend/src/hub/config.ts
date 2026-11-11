@@ -35,7 +35,8 @@ export function carregarHub(): void {
   const emissor = (process.env.DMS_ID_EMISSOR ?? '').trim();
   const aplicativo = (process.env.HUB_APLICATIVO ?? '').trim();
   const segredo = (process.env.HUB_SEGREDO ?? '').trim();
-  const versao = (process.env.APP_VERSION ?? '').trim() || '0.1.0';
+  // a versão que o hub mostra: APP_VERSION, senão o commit (GIT_SHA do build Nixpacks no EasyPanel), senão o padrão.
+  const versao = (process.env.APP_VERSION ?? '').trim() || (process.env.GIT_SHA ?? '').trim() || '0.1.0';
   const aceitaIntegracoes = booleana('ACEITAR_INTEGRACOES', true);
 
   if (ligado) {

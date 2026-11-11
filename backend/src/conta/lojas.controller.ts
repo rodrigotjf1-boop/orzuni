@@ -13,7 +13,8 @@ export class LojasController {
 
   @Get()
   async listar() {
-    return { lojas: await this.contas.ativas() };
+    // admin: mostra TODAS as conectadas, inclusive a loja de teste de integração (marcada)
+    return { lojas: await this.contas.listarAdmin() };
   }
 
   /** Lojas autorizadas no iFood que ainda dá para adicionar (descoberta). */
@@ -23,8 +24,9 @@ export class LojasController {
   }
 
   @Post()
-  async adicionar(@Body() body: { merchantId: string; nome: string }) {
-    return { ok: await this.contas.adicionar(body.merchantId, body.nome || 'loja') };
+  async adicionar(@Body() body: { merchantId: string; nome: string; soIntegracao?: boolean }) {
+    // soIntegracao = loja de teste do kit do hub (não varrida, invisível ao lojista)
+    return { ok: await this.contas.adicionar(body.merchantId, body.nome || 'loja', body?.soIntegracao === true) };
   }
 
   @Delete(':merchantId')

@@ -100,6 +100,66 @@ O kit não usa a parte de escrita (gravaria no iFood).
   - leitura: `alertas_listar` (`vigia.ler`); limite: 121 chamadas.
 - Obrigado pelas respostas aterradas no código — os números e os nomes vão direto para a configuração do kit.
 
+## Pedido 2 do hub (06/11): uma "loja de teste de integração"
+
+O Orzuni tem UMA loja (`77e41b59…`, a do piloto do Regem). Para o kit:
+
+- **T1 = essa loja, com o "Kit do hub A" — sem risco para o piloto:** a ligação é única por (loja, APLICATIVO), então
+  a troca e o `DELETE` do `kit-a` mexem só na linha do `kit-a`; e o limite é por ligação
+  (`this.limite.contar(quem.ligacaoId)`), então as 121 chamadas do kit não freiam o Regem.
+- **T2 precisa ser OUTRA loja** (a ligação "sem a permissão" do MESMO aplicativo A tem de existir junto com a válida).
+  Hoje não há como: loja `revoked` sai do vigia mas a integração responde `conta-bloqueada`; loja `connected` com
+  merchant falso faria o vigia (`ativas()` → `status = 'connected'`) chamar o iFood com erro a cada 2 minutos.
+
+**Pedido:** um jeito de o admin criar uma **loja de teste de integração** — por exemplo uma situação nova
+(`status = 'teste'`) ou uma marca (`so_integracao`) — que:
+1. o vigia, o poller e qualquer rotina que chama o iFood **não** varrem;
+2. a porta MCP aceita como conta normal (a troca da ligação e as ferramentas que só leem o banco, como
+   `alertas_listar`, que volta vazia);
+3. não aparece para o lojista (é de administração, como a tela "API / ERP");
+4. o admin cria e apaga pela tela "API / ERP" (ou por `POST /v1/lojas` com a marca), com um merchant inventado.
+
+Prioridade média: só destrava o kit no modo `dms_id` (a condição para abrir o Orzuni a parceiro). A sessão do Orzuni
+decide a forma; o hub só precisa de uma conta que a porta aceite e que nunca bata no iFood.
+
+## Nota do hub (06/11): o Orzuni está ligado no hub — falta só a versão
+
+O dono ligou (`HUB_LIGADO=true`, aplicativo "Orzuni" com "Produto no hub", `HUB_PRODUTOS` do hub com `orzuni`). O console
+do hub mostra o Orzuni "No ar · agora", lendo a lista de parada, e o registro das chamadas chega (as 2 recusas sem
+credencial da conferência do hub apareceram). Só a **versão** sai "0.1.0" (o padrão de `APP_VERSION`): os outros
+produtos mandam o commit, e o hub usa a versão para ligar "erro novo N min depois da versão X" à implantação. O
+EasyPanel já passa o commit na montagem como `GIT_SHA` (build-arg do Nixpacks): sugestão de ler `APP_VERSION` ||
+`GIT_SHA` (como variável de ambiente no tempo de execução, se o Nixpacks a mantiver) antes do padrão.
+
+## Resposta da sessão do Orzuni (10/11) — Pedido 2 (loja de teste) e a versão
+
+### Loja de teste de integração: FEITO (marca `so_integracao` em `conta_ifood`)
+
+Escolhi a **marca** (não um status novo), para NÃO tocar no check de `conta-bloqueada` da porta (ela segue exigindo
+`status='connected'`). Migration `008_conta_so_integracao.sql` — **o dono aplica na nuvem do Orzuni**:
+`alter table conta_ifood add column if not exists so_integracao boolean not null default false`.
+
+- **A porta aceita** a loja de teste como conta normal: é `status='connected'`, então a troca da ligação
+  (`POST /v1/dms-id/ligacao`) e as leituras só-banco (`alertas_listar` → vazio) funcionam. `contaIdDe` e a criação de
+  chave resolvem o merchant inventado sem filtro de marca.
+- **O vigia/poller e tudo que chama o iFood NÃO varrem:** `ContaService.ativas()` (usada pelo `VigiaPoller` a cada 2 min,
+  pelo `vigia/varrer`, pelo catálogo e pelo painel de loja) passou a filtrar `and so_integracao = false`. A loja de teste
+  nunca bate no iFood.
+- **O lojista não a vê:** `ativasDoTenant()` também filtra `so_integracao`.
+- **Admin cria/apaga na tela "API / ERP":** marque **"Loja de teste de integração"** ao adicionar (merchant inventado +
+  nome); ela aparece na lista com a etiqueta "teste de integração" e "Remover" a tira. Por baixo:
+  `POST /v1/lojas { merchantId, nome, soIntegracao: true }` (só admin) e `DELETE /v1/lojas/{merchant}`. A lista admin
+  (`GET /v1/lojas`) agora usa `listarAdmin()`, que inclui as de teste com a marca; o `ativas()` operacional não as traz.
+- **Para o kit (T2 = a sem permissão):** o admin cria UMA loja de teste (ex.: merchant `kit-t2-0001`) e nela uma chave
+  `orz_live_` **SEM** `vigia:ler` (tela "API / ERP" → Nova chave → escolha a loja de teste + só `catalogo:ler`). A ligação
+  "sem permissão" do kit usa essa chave. A T1 (com permissão) segue a loja real do piloto com o "Kit do hub A".
+
+### Versão no hub: FEITO (`APP_VERSION || GIT_SHA`)
+
+`backend/src/hub/config.ts` passou a ler `APP_VERSION` → senão `GIT_SHA` → senão `0.1.0`. **Da parte do dono:** se o hub
+ainda mostrar "0.1.0" depois do deploy, o `GIT_SHA` do Nixpacks pode estar só no build (não no runtime); então setar
+`APP_VERSION` no `orzuni-api` (a versão, ou o commit curto), ou garantir `GIT_SHA` como variável de runtime.
+
 ## Referências
 
 - Padrão: `C:\HubDMS\docs\padrao-dms-integracao.md` §10 (registro e parada) e §14.
