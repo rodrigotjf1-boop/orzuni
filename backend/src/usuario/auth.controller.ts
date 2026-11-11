@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { assinarSessao, verificarSessao } from './sessao';
+import { tenantDaSessao } from './tenant-admin';
 
 /**
  * Contas de usuário (revenda). Público — cadastro e login não exigem sessão.
@@ -17,14 +18,14 @@ export class AuthController {
     if (!r.ok) return { ok: false, erro: r.erro };
     // auto-login após o cadastro (sem verificação de e-mail nesta fase)
     const u = await this.usuarios.autenticar(body.email, body.senha);
-    return u ? { ok: true, token: assinarSessao({ sub: u.id, tenant: u.tenant, email: u.email }) } : { ok: true };
+    return u ? { ok: true, token: assinarSessao({ sub: u.id, tenant: tenantDaSessao(u.email, u.tenant), email: u.email }) } : { ok: true };
   }
 
   @Post('login')
   async login(@Body() body: { email: string; senha: string }) {
     const u = await this.usuarios.autenticar(body?.email, body?.senha);
     if (!u) return { ok: false, erro: 'e-mail ou senha inválidos' };
-    return { ok: true, token: assinarSessao({ sub: u.id, tenant: u.tenant, email: u.email }) };
+    return { ok: true, token: assinarSessao({ sub: u.id, tenant: tenantDaSessao(u.email, u.tenant), email: u.email }) };
   }
 
   @Get('me')
