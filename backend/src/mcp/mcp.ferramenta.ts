@@ -119,6 +119,8 @@ function fraseEscrita(r: ResultadoEscrita): string {
   if (r.situacao === 'aplicado' && r.dados) {
     // edição de nome/descrição do item
     if ('campos' in r.dados) return 'Nome/descrição do item atualizados no iFood.';
+    // troca de foto do item
+    if ('foto' in r.dados) return 'Foto do item atualizada no iFood.';
     // troca de código de PDV
     if ('de' in r.dados && 'para' in r.dados) return `Código de PDV alterado de ${String(r.dados.de)} para ${String(r.dados.para)}.`;
     // pausa da LOJA inteira (interrupção)

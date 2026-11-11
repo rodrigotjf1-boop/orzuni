@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Porta de integração do Orzuni",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "A porta MCP que os produtos da DMS ligados à loja usam para ver e mexer no cardápio da loja no iFood: itens, preços, pausas, complementos e os alertas do vigia. Credencial: o token do DMS ID com o segredo da ligação (DMS-Ligacao).",
     "x-dms-produto": "orzuni",
     "x-dms-pacote": "0.10.1"
@@ -522,6 +522,41 @@
         },
         "required": [
           "codigo_pdv",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "item_foto_definir",
+      "descricao": "Troca a FOTO de UM item no iFood, pelo código de PDV. A foto vai em data-URI (data:image/jpeg;base64,… ou png).",
+      "permissao": "catalogo.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "imagem": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A foto em data-URI: data:image/jpeg;base64,… (ou png)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "imagem",
           "chaveIdempotencia"
         ],
         "additionalProperties": false
