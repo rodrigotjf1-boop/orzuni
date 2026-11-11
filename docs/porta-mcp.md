@@ -57,6 +57,7 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 | `alertas_listar`      | `vigia.ler`    | GET `/vigia/alertas`| `{}` (itens fora do ar + "desde quando") |
 | `loja_status_ler`     | `loja.ler`     | GET `/loja`         | `{}` |
 | `loja_horarios_ler`   | `loja.ler`     | GET `/loja/horarios`| `{}` |
+| `interrupcoes_listar` | `loja.ler`     | GET `/loja/interrupcoes` | `{}` (pausas vigentes e futuras: id, início, fim, descrição) |
 
 ### Escrita (com `chaveIdempotencia`)
 | Tool | Permissão | Rota REST traduzida | Argumentos |
@@ -68,7 +69,8 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 | `complemento_preco_definir` | `preco.escrever` | PATCH `/complementos/opcao/{id}/preco` (todas com o código) | `{ codigo_pdv, valor, chaveIdempotencia }` — **1 preço por código de PDV → todas as opções com esse código, em todos os grupos** |
 | `complemento_pausar`  | `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
 | `complemento_reativar`| `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
-| `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA, não um item) |
+| `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA; duração 1 min–7 dias; devolve `interrupcao_id`, início, fim e descrição; 409 → `interrupcao_sobreposta` + a pausa que já vale) |
+| `interrupcao_remover` | `loja.escrever`   | DELETE `/loja/interrupcoes/{id}` | `{ interrupcao_id, chaveIdempotencia }` — "reabrir agora"; **idempotente** (já removida/inexistente = sucesso) |
 
 ### Envelope de resposta das escritas (`structuredContent`)
 Toda escrita devolve, em `structuredContent`, o que a porta FEZ. **Padrão §6:** o `content` de TEXTO
@@ -84,6 +86,8 @@ iFood desta loja.`) —, **nunca o JSON**. Quem precisa dos campos (`situacao`/`
 - Recusa (`situacao` `nao_encontrado`/`recusado` → também `isError: true`): `codigo` distinto + `pode_repetir`.
   Códigos: `pdv_inexistente` (não repetir) · `ifood_indisponivel` (**pode repetir**) · `dados_invalidos` ·
   `conflito` · `erro_ifood` · `erro_interno` (pode repetir) · `chave_reutilizada` (chaveIdempotencia reusada com outro pedido).
+  Pausa da loja (interrupção): `interrupcao_sobreposta` (não repetir; `dados.interrupcao` = a pausa que já vale: id, início, fim, descrição) ·
+  `interrupcao_duracao_invalida` (fora de 1 min–7 dias) · `interrupcao_datas_invalidas` (início/fim não-ISO) · `interrupcao_recem_criada` (**pode repetir**; criada há pouco, aguarde para remover).
 - "Loja fechada/desligada" **não** é um código de tool: a loja revogada no Orzuni dá **403 `conta-bloqueada`**
   no portão (antes da tool); a situação de abertura é consultada por `loja_status_ler`.
 
@@ -151,3 +155,7 @@ O produto entra no hub pelo `ClienteHub` do pacote comum (`backend/src/hub/`), *
 - **O6** — entrada no hub (`ClienteHub` do pacote **0.10.1**, módulo `backend/src/hub/`, desligado por
   `HUB_LIGADO=false`): registro/parada/erro em cada chamada da porta (ver seção acima) + rota
   `DELETE /v1/dms-id/ligacao` (a ligação revoga a si mesma, para o kit de conformidade). Nasce inerte.
+- **O7** — pausa da LOJA no iFood (F5 da "pausa por canal" do Regem): `interrupcao_remover` e
+  `interrupcoes_listar` novas; `interrupcao_criar` passa a devolver o `interrupcao_id`/início/fim/descrição e,
+  no 409, a pausa que já vale. Contrato **1.1.0** (aditivo). Reusa `loja.ler`/`loja.escrever` (sem permissão
+  nova). O Regem faz "+10/+30" com remover + criar.

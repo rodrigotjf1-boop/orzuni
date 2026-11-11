@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { IfoodMerchantService } from '../ifood/ifood-merchant.service';
+import type { ResultadoEscrita } from '../catalogo/catalogo.service';
 
 /**
  * Módulo Loja (Merchant) — modelo canônico do Orzuni sobre a Merchant API do iFood.
@@ -97,6 +98,64 @@ export class LojaService {
     const amigavel =
       e.codigo === 'RecentlyCreatedInterruption' ? 'A pausa foi criada há pouco — aguarde alguns instantes para cancelar.' : e.mensagem;
     return { ok: false, erro: amigavel, codigo: e.codigo };
+  }
+
+  // ───────── porta MCP (ResultadoEscrita): pausar a loja inteira no iFood ─────────
+  // Métodos próprios da porta, que devolvem o envelope `ResultadoEscrita` (como o
+  // catálogo). Os `{ ok, ... }` acima continuam para o REST/front. Pedido do Regem
+  // (F5 da "pausa por canal"): o criar devolve o id/início/fim/descrição; o 409
+  // devolve a pausa que já vale; o remover é idempotente (já removida = sucesso).
+
+  private static readonly MIN_PAUSA_MS = 60_000; // 1 minuto
+  private static readonly MAX_PAUSA_MS = 7 * 24 * 60 * 60_000; // 7 dias
+
+  /** Pausa a LOJA inteira no iFood (interrupção). Valida a duração (1 min a 7 dias). */
+  async pausarLojaPorta(merchantId: string, dados: { inicio: string; fim: string; descricao?: string }): Promise<ResultadoEscrita> {
+    const inicioMs = Date.parse(dados.inicio);
+    const fimMs = Date.parse(dados.fim);
+    if (Number.isNaN(inicioMs) || Number.isNaN(fimMs))
+      return { situacao: 'recusado', codigo: 'interrupcao_datas_invalidas', pode_repetir: false, erro: 'Início e fim precisam estar em ISO 8601 (ex.: 2026-11-10T14:00:00Z).' };
+    const duracao = fimMs - inicioMs;
+    if (duracao < LojaService.MIN_PAUSA_MS || duracao > LojaService.MAX_PAUSA_MS)
+      return { situacao: 'recusado', codigo: 'interrupcao_duracao_invalida', pode_repetir: false, erro: 'A pausa precisa durar de 1 minuto a 7 dias.' };
+    const descricao = (dados.descricao ?? '').trim().slice(0, 200) || 'Pausa';
+    const r = await this.ifood.criarInterrupcao(merchantId, { description: descricao, start: dados.inicio, end: dados.fim });
+    if (r.status === 201) return { situacao: 'aplicado', dados: { interrupcao_id: r.data?.id, inicio: dados.inicio, fim: dados.fim, descricao } };
+    const e = this.erroIfood(r.data);
+    if (e.codigo === 'InterruptionOverlap' || r.status === 409) {
+      const sobreposta = await this.interrupcaoSobreposta(merchantId, inicioMs, fimMs);
+      return {
+        situacao: 'recusado',
+        codigo: 'interrupcao_sobreposta',
+        pode_repetir: false,
+        erro: 'Já existe uma pausa que cobre parte desse período no iFood.',
+        ...(sobreposta ? { dados: { interrupcao: sobreposta } } : {}),
+      };
+    }
+    return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: true, erro: e.mensagem };
+  }
+
+  /** A interrupção vigente/futura que cruza o período pedido (para devolver no 409). */
+  private async interrupcaoSobreposta(merchantId: string, inicioMs: number, fimMs: number) {
+    const lista = await this.interrupcoes(merchantId).catch(() => [] as Array<{ id: string; descricao: string; inicio: string; fim: string }>);
+    return (
+      lista.find((i) => {
+        const s = Date.parse(i.inicio);
+        const e = Date.parse(i.fim);
+        return !Number.isNaN(s) && !Number.isNaN(e) && s < fimMs && e > inicioMs;
+      }) ?? null
+    );
+  }
+
+  /** Remove uma pausa pelo id. Já removida / inexistente (404) = sucesso idempotente. */
+  async removerPausaPorta(merchantId: string, interrupcaoId: string): Promise<ResultadoEscrita> {
+    const r = await this.ifood.removerInterrupcao(merchantId, interrupcaoId);
+    if (r.status >= 200 && r.status < 300) return { situacao: 'aplicado', dados: { interrupcao_id: interrupcaoId, removida: true } };
+    if (r.status === 404) return { situacao: 'aplicado', dados: { interrupcao_id: interrupcaoId, removida: true, ja_estava_removida: true } };
+    const e = this.erroIfood(r.data);
+    if (e.codigo === 'RecentlyCreatedInterruption' || r.status === 409)
+      return { situacao: 'recusado', codigo: 'interrupcao_recem_criada', pode_repetir: true, erro: 'A pausa foi criada há pouco — aguarde alguns instantes para removê-la.' };
+    return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: true, erro: e.mensagem };
   }
 
   /** Horário de funcionamento (turnos por dia). */
