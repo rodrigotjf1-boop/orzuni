@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Porta de integração do Orzuni",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "A porta MCP que os produtos da DMS ligados à loja usam para ver e mexer no cardápio da loja no iFood: itens, preços, pausas, complementos e os alertas do vigia. Credencial: o token do DMS ID com o segredo da ligação (DMS-Ligacao).",
     "x-dms-produto": "orzuni",
     "x-dms-pacote": "0.10.1"
@@ -483,6 +483,121 @@
           }
         },
         "required": [
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "item_editar",
+      "descricao": "Muda o nome e/ou a descrição de UM item no iFood, pelo código de PDV (informe ao menos um dos dois). Nome até 100, descrição até 500 caracteres. A resposta lista os campos alterados (antes → depois).",
+      "permissao": "catalogo.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "nome": {
+            "description": "O novo nome do item (até 100 caracteres).",
+            "type": "string",
+            "maxLength": 100
+          },
+          "descricao": {
+            "description": "A nova descrição do item (até 500 caracteres).",
+            "type": "string",
+            "maxLength": 500
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "complemento_nome_definir",
+      "descricao": "Muda o nome de uma opção de complemento no iFood, pelo código de PDV (todas as opções com o código, em todos os grupos) ou pelo id da opção. Nome até 100 caracteres. A resposta lista cada opção.",
+      "permissao": "catalogo.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "description": "O código de PDV da opção: renomeia TODAS as opções com esse código.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "opcao_id": {
+            "description": "O id de UMA opção no iFood (alternativa ao codigo_pdv).",
+            "type": "string",
+            "minLength": 1
+          },
+          "nome": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O novo nome da opção (até 100 caracteres)."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "nome",
+          "chaveIdempotencia"
+        ],
+        "additionalProperties": false
+      },
+      "escrita": "chave"
+    },
+    {
+      "nome": "item_codigo_pdv_definir",
+      "descricao": "Troca o código de PDV de um item no iFood. Recusa com codigo_ja_existe se o novo código já estiver em uso em outro item.",
+      "permissao": "catalogo.escrever",
+      "esquemaEntrada": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "codigo_pdv": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O código de PDV do produto (a chave de ligação com o iFood)."
+          },
+          "codigo_pdv_novo": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "O novo código de PDV do item."
+          },
+          "chaveIdempotencia": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "description": "Uma chave única desta ação (8 a 100 caracteres): repetir com a mesma chave não grava de novo."
+          }
+        },
+        "required": [
+          "codigo_pdv",
+          "codigo_pdv_novo",
           "chaveIdempotencia"
         ],
         "additionalProperties": false

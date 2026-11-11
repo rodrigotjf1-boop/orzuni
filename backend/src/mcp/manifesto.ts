@@ -20,8 +20,8 @@ export const BASE_DO_MANIFESTO = 'https://api.orzuni.com';
 /** A porta MCP: o endereço e a versão da especificação. */
 export const PORTA_MCP = { endereco: `${BASE_DO_MANIFESTO}/v1/mcp`, versao: '2026-07-28' } as const;
 
-/** A versão do contrato da porta (Padrão §12). 1.1.0: aditivo — interrupcao_remover e interrupcoes_listar (pausa da loja no iFood). */
-export const VERSAO_DO_CONTRATO = '1.1.0';
+/** A versão do contrato da porta (Padrão §12). 1.2.0: aditivo — item_editar, complemento_nome_definir e item_codigo_pdv_definir (R3), + ordem/descricao nas leituras. */
+export const VERSAO_DO_CONTRATO = '1.2.0';
 
 function permissoes(): Record<string, PermissaoNoManifesto> {
   return Object.fromEntries(PERMISSOES.map((p) => [p.id, { frase: p.frase, classes: classesDe(p), sensivel: p.sensivel }]));
