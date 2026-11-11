@@ -70,6 +70,7 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 | `complemento_pausar`  | `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
 | `complemento_reativar`| `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
 | `item_editar`         | `catalogo.escrever` | PUT `/items` (nome/descrição do produto) | `{ codigo_pdv, nome?, descricao?, chaveIdempotencia }` — ao menos um de nome/descrição; **nome ≤ 100, descrição ≤ 500**; resposta lista `dados.campos:[{campo,antes,depois}]` (R3) |
+| `item_foto_definir`   | `catalogo.escrever` | upload + PUT `/items` (foto) | `{ codigo_pdv, imagem, chaveIdempotencia }` — `imagem` em **data-URI** (`data:image/jpeg;base64,…` ou png); resposta `dados:{foto:true}` (R3) |
 | `complemento_nome_definir` | `catalogo.escrever` | PUT `/products/{id}` (nome da opção) | `{ codigo_pdv \| opcao_id, nome, chaveIdempotencia }` — renomeia TODAS as opções com o código (como o preço); **nome ≤ 100**; resposta lista cada opção (R3) |
 | `item_codigo_pdv_definir` | `catalogo.escrever` | PUT `/items` (externalCode) | `{ codigo_pdv, codigo_pdv_novo, chaveIdempotencia }` — recusa `codigo_ja_existe` se o novo já está em uso; resposta `dados:{de,para}` (R3) |
 | `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA; duração 1 min–7 dias; devolve `interrupcao_id`, início, fim e descrição; 409 → `interrupcao_sobreposta` + a pausa que já vale) |
@@ -169,3 +170,6 @@ O produto entra no hub pelo `ClienteHub` do pacote comum (`backend/src/hub/`), *
   todas em `catalogo.escrever`; e nas leituras `ordem` (cardápio, categorias, grupos e opções) + `descricao`
   (cardápio). Contrato **1.2.0** (aditivo). O nome da opção renomeia o PRODUTO da opção (`PUT /products/{id}`,
   propaga a todos os itens que a usam) — sem trocar o id. O Regem edita e testa contra os exemplos deste doc.
+- **O9** — `item_foto_definir` (`catalogo.escrever`): troca a FOTO do item, `imagem` em **data-URI**
+  (`data:image/jpeg;base64,…` ou png) → upload no iFood + re-PUT; resposta `dados:{foto:true}`. Contrato **1.3.0**
+  (aditivo). Fecha o pedido do Regem "chave com `catalogo.escrever` + ferramentas de foto e de nome/descrição".

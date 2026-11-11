@@ -1350,6 +1350,18 @@ export class CatalogoService {
     return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: false, erro: r.erros.join('; ') || 'Não foi possível editar o item no iFood.' };
   }
 
+  /** Troca a FOTO de um item pelo PDV (data-URI jpg/png → upload no iFood + re-PUT). */
+  async definirFotoItem(merchantId: string, pdv: string, imagem: string): Promise<ResultadoEscrita> {
+    const img = String(imagem ?? '').trim();
+    if (!/^data:image\/(jpe?g|png);base64,/i.test(img))
+      return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Envie a foto como data-URI (data:image/jpeg;base64,… ou png).' };
+    if (!(await this.resolver(merchantId, pdv)))
+      return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
+    const r = await this.editar(merchantId, pdv, { imagem: img });
+    if (r.ok) return { situacao: 'aplicado', dados: { foto: true } };
+    return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: false, erro: r.erros.join('; ') || 'Não foi possível atualizar a foto no iFood.' };
+  }
+
   /** Troca o código de PDV de um item; recusa se o novo já existe. */
   async definirCodigoPdvItem(merchantId: string, pdv: string, novo: string): Promise<ResultadoEscrita> {
     const novoPdv = String(novo ?? '').trim();

@@ -102,6 +102,7 @@ async function subirPorta() {
   // R3 (gestão do catálogo): nome/descrição do item, troca de código, nome da opção
   const definirNomeDescricaoItem = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { campos: [{ campo: 'nome', antes: 'X-Burger', depois: 'X-Bacon' }] } }));
   const definirCodigoPdvItem = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { de: '2051', para: '9001' } }));
+  const definirFotoItem = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { foto: true } }));
   const definirNomeComplementoPorPdv = jest.fn(async () => ({ situacao: 'aplicado' as const, opcoes: [{ grupo: 'Adicionais', optionId: 'o1', situacao: 'aplicado' as const }] }));
   const definirNomeOpcao = jest.fn(async () => ({ situacao: 'aplicado' as const, opcoes: [{ grupo: 'Adicionais', optionId: 'o1', situacao: 'aplicado' as const }] }));
 
@@ -128,6 +129,7 @@ async function subirPorta() {
           definirStatusComplementoPorPdv: jest.fn(async () => ({ situacao: 'aplicado', opcoes: [] })),
           definirNomeDescricaoItem,
           definirCodigoPdvItem,
+          definirFotoItem,
           definirNomeComplementoPorPdv,
           definirNomeOpcao,
           reprecificar: jest.fn(async () => ({ batchId: 'b', ignorados: [] })),
@@ -162,6 +164,7 @@ async function subirPorta() {
     interrupcoesLoja,
     definirNomeDescricaoItem,
     definirCodigoPdvItem,
+    definirFotoItem,
     definirNomeComplementoPorPdv,
     definirNomeOpcao,
     ligacao(escopos: string[], merchantId: string) {
@@ -299,11 +302,25 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
   it('as ferramentas R3 aparecem no tools/list com catalogo.escrever (e não sem)', async () => {
     const comEscopo = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm1'), 'tools/list');
     const nomes = (comEscopo.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(nomes).toEqual(expect.arrayContaining(['item_editar', 'complemento_nome_definir', 'item_codigo_pdv_definir']));
+    expect(nomes).toEqual(expect.arrayContaining(['item_editar', 'item_foto_definir', 'complemento_nome_definir', 'item_codigo_pdv_definir']));
     const semEscopo = await chamar(p.origem, dmsId.emitir(), p.ligacao(['catalogo.ler'], 'm1'), 'tools/list');
     const nomesLer = (semEscopo.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
     expect(nomesLer).not.toContain('item_editar');
+    expect(nomesLer).not.toContain('item_foto_definir');
     expect(nomesLer).not.toContain('item_codigo_pdv_definir');
+  });
+
+  it('item_foto_definir troca a foto (data-URI) e responde pt-BR', async () => {
+    const img = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm7'), 'tools/call', 'item_foto_definir', {
+      codigo_pdv: '2051',
+      imagem: img,
+      chaveIdempotencia: 'foto-0001',
+    });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.definirFotoItem).toHaveBeenCalledWith('m7', '2051', img);
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado', foto: true });
+    expect(r.corpo.result.content[0].text).toMatch(/Foto do item atualizada no iFood\./);
   });
 
   it('item_editar edita nome/descrição e responde pt-BR (§6)', async () => {

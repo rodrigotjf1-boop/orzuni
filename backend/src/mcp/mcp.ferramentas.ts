@@ -316,6 +316,27 @@ const itemEditar: Ferramenta = {
   },
 };
 
+const itemFotoDefinir: Ferramenta = {
+  nome: 'item_foto_definir',
+  escopo: 'catalogo.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'item_foto_definir',
+      {
+        title: 'Trocar a foto de um item',
+        description: 'Troca a FOTO de UM item no iFood, pelo código de PDV. A foto vai em data-URI (data:image/jpeg;base64,… ou png).',
+        inputSchema: z.object({
+          codigo_pdv: CODIGO_PDV,
+          imagem: z.string().min(1).describe('A foto em data-URI: data:image/jpeg;base64,… (ou png).'),
+          chaveIdempotencia: CHAVE_IDEMPOTENCIA,
+        }),
+      },
+      async ({ codigo_pdv, imagem, chaveIdempotencia }) =>
+        escrita(c.quem, 'item_foto_definir', chaveIdempotencia, { codigo_pdv, imagem }, () => c.servicos.catalogo.definirFotoItem(c.quem.merchantId, codigo_pdv, imagem)),
+    );
+  },
+};
+
 const complementoNomeDefinir: Ferramenta = {
   nome: 'complemento_nome_definir',
   escopo: 'catalogo.escrever',
@@ -444,6 +465,7 @@ export const FERRAMENTAS: readonly Ferramenta[] = [
   complementoPausar,
   complementoReativar,
   itemEditar,
+  itemFotoDefinir,
   complementoNomeDefinir,
   itemCodigoPdvDefinir,
   interrupcaoCriar,

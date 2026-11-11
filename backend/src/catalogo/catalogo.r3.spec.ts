@@ -85,6 +85,34 @@ describe('definirCodigoPdvItem', () => {
   });
 });
 
+describe('definirFotoItem', () => {
+  it('troca a foto (data-URI) e devolve dados.foto', async () => {
+    const c = svc();
+    jest.spyOn(c as never as { resolver: jest.Mock }, 'resolver').mockResolvedValue({ itemId: 'i' });
+    const editar = jest.spyOn(c as never as { editar: jest.Mock }, 'editar').mockResolvedValue({ ok: true, erros: [] });
+    const img = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    const r = await c.definirFotoItem('m', '2051', img);
+    expect(r).toMatchObject({ situacao: 'aplicado' });
+    expect(r.dados).toEqual({ foto: true });
+    expect(editar).toHaveBeenCalledWith('m', '2051', { imagem: img });
+  });
+
+  it('recusa imagem que não é data-URI jpg/png (sem tocar no iFood)', async () => {
+    const c = svc();
+    const resolver = jest.spyOn(c as never as { resolver: jest.Mock }, 'resolver');
+    const r = await c.definirFotoItem('m', '1', 'https://x.com/foto.jpg');
+    expect(r).toMatchObject({ situacao: 'recusado', codigo: 'dados_invalidos' });
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it('item inexistente → pdv_inexistente', async () => {
+    const c = svc();
+    jest.spyOn(c as never as { resolver: jest.Mock }, 'resolver').mockResolvedValue(null);
+    const r = await c.definirFotoItem('m', 'zzz', 'data:image/png;base64,AAAA');
+    expect(r).toMatchObject({ situacao: 'nao_encontrado', codigo: 'pdv_inexistente' });
+  });
+});
+
 describe('definirNomeComplementoPorPdv', () => {
   it('renomeia TODAS as opções com o código (updateProduct) e consolida', async () => {
     const updateProduct = jest.fn(async () => true);
