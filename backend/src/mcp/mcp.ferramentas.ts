@@ -324,10 +324,11 @@ const itemFotoDefinir: Ferramenta = {
       'item_foto_definir',
       {
         title: 'Trocar a foto de um item',
-        description: 'Troca a FOTO de UM item no iFood, pelo código de PDV. A foto vai em data-URI (data:image/jpeg;base64,… ou png).',
+        description:
+          'Troca a FOTO de UM item no iFood, pelo código de PDV. A foto vai em data-URI JPEG ou png (data:image/jpeg;base64,…), de até 8 MB. O iFood recomenda imagem quadrada, no mínimo 300×300 px; a dimensão quem valida é o iFood. Foto grande demais volta recusada (codigo imagem_grande) antes de ir ao iFood.',
         inputSchema: z.object({
           codigo_pdv: CODIGO_PDV,
-          imagem: z.string().min(1).describe('A foto em data-URI: data:image/jpeg;base64,… (ou png).'),
+          imagem: z.string().min(1).describe('A foto em data-URI: data:image/jpeg;base64,… (ou png). JPEG/PNG, até 8 MB, quadrada e ≥ 300×300 px.'),
           chaveIdempotencia: CHAVE_IDEMPOTENCIA,
         }),
       },
