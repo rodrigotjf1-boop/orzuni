@@ -29,7 +29,9 @@ export class ContaService {
   async ativas(): Promise<Conta[]> {
     try {
       const rows = await this.store.query(
-        `select id, merchant_id, nome from conta_ifood where status = 'connected' order by criado_em`,
+        // só as lojas OPERACIONAIS: a loja de teste de integração (so_integracao) fica de
+        // fora do vigia/poller e de tudo que chama o iFood (merchant inventado).
+        `select id, merchant_id, nome from conta_ifood where status = 'connected' and so_integracao = false order by criado_em`,
       );
       if (rows.length) return rows.map((r) => ({ id: r.id, merchantId: r.merchant_id, nome: r.nome ?? 'loja' }));
     } catch (e: any) {
@@ -56,12 +58,30 @@ export class ContaService {
     if (!this.store.temBanco) return [];
     try {
       const rows = await this.store.query(
-        `select id, merchant_id, nome from conta_ifood where tenant_id = $1 and status = 'connected' order by criado_em`,
+        // o lojista nunca vê a loja de teste de integração (so_integracao)
+        `select id, merchant_id, nome from conta_ifood where tenant_id = $1 and status = 'connected' and so_integracao = false order by criado_em`,
         [tenant],
       );
       return rows.map((r) => ({ id: r.id, merchantId: r.merchant_id, nome: r.nome ?? 'loja' }));
     } catch (e: any) {
       this.logger.warn(`ativasDoTenant falhou: ${e?.message ?? e}`);
+      return [];
+    }
+  }
+
+  /**
+   * Lista de ADMIN (tela "API / ERP"): as lojas conectadas, INCLUSIVE as de teste de
+   * integração, cada uma com a marca `soIntegracao` — para o admin ver e apagar.
+   */
+  async listarAdmin(): Promise<Array<{ id?: string; merchantId: string; nome: string; soIntegracao: boolean }>> {
+    if (!this.store.temBanco) return [];
+    try {
+      const rows = await this.store.query(
+        `select id, merchant_id, nome, so_integracao from conta_ifood where status = 'connected' order by so_integracao, criado_em`,
+      );
+      return rows.map((r) => ({ id: r.id, merchantId: r.merchant_id, nome: r.nome ?? 'loja', soIntegracao: r.so_integracao === true }));
+    } catch (e: any) {
+      this.logger.warn(`listarAdmin falhou: ${e?.message ?? e}`);
       return [];
     }
   }
@@ -116,13 +136,13 @@ export class ContaService {
     return out;
   }
 
-  /** Registra/atualiza uma loja. */
-  async adicionar(merchantId: string, nome: string): Promise<boolean> {
+  /** Registra/atualiza uma loja. `soIntegracao` marca a loja de teste do kit (admin). */
+  async adicionar(merchantId: string, nome: string, soIntegracao = false): Promise<boolean> {
     if (!this.store.temBanco) return false;
     await this.store.query(
-      `insert into conta_ifood (tenant_id, merchant_id, nome, status) values ($1,$2,$3,'connected')
-       on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected'`,
-      [TENANT_PADRAO, merchantId, nome],
+      `insert into conta_ifood (tenant_id, merchant_id, nome, status, so_integracao) values ($1,$2,$3,'connected',$4)
+       on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected', so_integracao = excluded.so_integracao`,
+      [TENANT_PADRAO, merchantId, nome, soIntegracao],
     );
     return true;
   }

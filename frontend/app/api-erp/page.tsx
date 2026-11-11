@@ -25,6 +25,7 @@ export default function ApiErpPage() {
   // adicionar loja
   const [lojaMerchant, setLojaMerchant] = useState('');
   const [lojaNome, setLojaNome] = useState('');
+  const [lojaTeste, setLojaTeste] = useState(false);
   // editar escopos de uma chave existente
   const [editId, setEditId] = useState<string | null>(null);
   const [editEsc, setEditEsc] = useState<string[]>([]);
@@ -47,10 +48,11 @@ export default function ApiErpPage() {
 
   async function addLoja() {
     if (!lojaMerchant.trim()) return;
-    await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja');
+    await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja', lojaTeste);
     setLojaMerchant('');
     setLojaNome('');
-    toast('Loja adicionada.');
+    toast(lojaTeste ? 'Loja de teste de integração adicionada.' : 'Loja adicionada.');
+    setLojaTeste(false);
     carregar();
   }
   async function removerLoja(m: string, nome: string) {
@@ -120,11 +122,18 @@ export default function ApiErpPage() {
       {/* lojas */}
       <div style={card}>
         <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Lojas</h2>
-        <div className="sub" style={{ marginBottom: 16 }}>Cada loja é um merchant do iFood que autorizou o Orzuni. O vigia varre todas; a chave pode ficar ligada a uma delas.</div>
+        <div className="sub" style={{ marginBottom: 16 }}>Cada loja é um merchant do iFood que autorizou o Orzuni. O vigia varre as lojas reais; a de <b>teste de integração</b> fica de fora (não bate no iFood) e não aparece para o lojista. A chave pode ficar ligada a uma delas.</div>
         {lojas.map((l) => (
           <div key={l.merchantId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <b style={{ fontSize: '.9rem' }}>{l.nome}</b>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <b style={{ fontSize: '.9rem' }}>{l.nome}</b>
+                {l.soIntegracao && (
+                  <span className="mono" style={{ fontSize: '.55rem', padding: '3px 8px', borderRadius: 6, background: 'rgba(255,162,38,.12)', color: 'var(--tanger)', textTransform: 'none' }}>
+                    teste de integração
+                  </span>
+                )}
+              </div>
               <div className="mono" style={{ color: 'var(--dim)', fontSize: '.66rem', textTransform: 'none', marginTop: 2 }}>merchant {l.merchantId}</div>
             </div>
             <button className="btn ghost mini" onClick={() => removerLoja(l.merchantId, l.nome)}>
@@ -132,9 +141,13 @@ export default function ApiErpPage() {
             </button>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...box, flex: 2, minWidth: 220, fontFamily: 'var(--font-mono)', fontSize: '.8rem' }} placeholder="merchantId (UUID do iFood)" value={lojaMerchant} onChange={(e) => setLojaMerchant(e.target.value)} />
           <input style={{ ...box, flex: 1, minWidth: 120 }} placeholder="Nome" value={lojaNome} onChange={(e) => setLojaNome(e.target.value)} />
+          <label className="sub" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.78rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={lojaTeste} onChange={(e) => setLojaTeste(e.target.checked)} />
+            Loja de teste de integração
+          </label>
           <button className="btn ghost mini" disabled={!lojaMerchant.trim()} onClick={addLoja}>
             Adicionar loja
           </button>

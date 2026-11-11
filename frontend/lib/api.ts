@@ -43,6 +43,7 @@ export interface Chave {
 export interface Loja {
   merchantId: string;
   nome: string;
+  soIntegracao?: boolean; // loja de teste de integração (admin): não varrida, invisível ao lojista
 }
 
 export interface Alerta {
@@ -250,8 +251,8 @@ export const api = {
   lojas: {
     listar: () => req<{ lojas: Loja[] }>('v1/lojas'),
     disponiveis: () => req<{ lojas: Loja[] }>('v1/lojas/disponiveis'),
-    adicionar: (merchantId: string, nome: string) =>
-      req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
+    adicionar: (merchantId: string, nome: string, soIntegracao = false) =>
+      req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome, soIntegracao }) }),
     remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
   },
   // As lojas do iFood DA CONTA do usuário logado (sessão). Isolado por tenant no backend.
