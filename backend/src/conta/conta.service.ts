@@ -136,21 +136,37 @@ export class ContaService {
     return out;
   }
 
-  /** Registra/atualiza uma loja. `soIntegracao` marca a loja de teste do kit (admin). */
-  async adicionar(merchantId: string, nome: string, soIntegracao = false): Promise<boolean> {
-    if (!this.store.temBanco) return false;
-    await this.store.query(
-      `insert into conta_ifood (tenant_id, merchant_id, nome, status, so_integracao) values ($1,$2,$3,'connected',$4)
-       on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected', so_integracao = excluded.so_integracao`,
-      [TENANT_PADRAO, merchantId, nome, soIntegracao],
-    );
-    return true;
+  /**
+   * Registra/atualiza uma loja no TENANT_PADRAO (admin). `soIntegracao` marca a loja de
+   * teste do kit. À prova de duplicata: recusa um merchant JÁ conectado em OUTRO tenant
+   * (a mesma trava do `adicionarNoTenant`) — senão o vigia varreria a loja duas vezes e
+   * o `remover` por merchant derrubaria a do piloto.
+   */
+  async adicionar(merchantId: string, nome: string, soIntegracao = false): Promise<{ ok: boolean; erro?: string }> {
+    if (!this.store.temBanco) return { ok: false, erro: 'banco indisponível' };
+    const dono = await this.tenantDoMerchant(merchantId);
+    if (dono && dono !== TENANT_PADRAO) return { ok: false, erro: 'esta loja já está conectada a outra conta' };
+    try {
+      await this.store.query(
+        `insert into conta_ifood (tenant_id, merchant_id, nome, status, so_integracao) values ($1,$2,$3,'connected',$4)
+         on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected', so_integracao = excluded.so_integracao`,
+        [TENANT_PADRAO, merchantId, nome, soIntegracao],
+      );
+      return { ok: true };
+    } catch (e: any) {
+      this.logger.warn(`adicionar falhou: ${e?.message ?? e}`);
+      return { ok: false, erro: 'não foi possível adicionar a loja' };
+    }
   }
 
-  /** Remove uma loja do registro (status revoked — não apaga o histórico). */
-  async remover(merchantId: string): Promise<boolean> {
+  /**
+   * Remove UMA loja do registro pelo ID da linha (status revoked — não apaga o histórico).
+   * Pelo id, não pelo merchant: um merchant pode ter mais de uma linha (tenants diferentes),
+   * e revogar por merchant derrubaria a do piloto (e a ligação do Regem com ela).
+   */
+  async remover(id: string): Promise<boolean> {
     if (!this.store.temBanco) return false;
-    await this.store.query(`update conta_ifood set status = 'revoked' where merchant_id = $1`, [merchantId]);
+    await this.store.query(`update conta_ifood set status = 'revoked' where id = $1`, [id]);
     return true;
   }
 

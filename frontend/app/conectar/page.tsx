@@ -64,7 +64,7 @@ export default function ConectarPage() {
               <div key={l.merchantId} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', border: '1px solid var(--line)', borderRadius: 12, background: 'var(--ink2)', padding: '12px 14px' }}>
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', flex: 'none', boxShadow: '0 0 8px var(--green)' }} />
                 <div style={{ fontWeight: 600, minWidth: 0, flex: 1 }}>{l.nome}</div>
-                <button className="btn" style={{ background: 'var(--ink)', border: '1px solid var(--line)' }} onClick={() => router.push('/cardapio')}>
+                <button className="btn ghost" onClick={() => router.push('/cardapio')}>
                   Abrir cardápio
                 </button>
               </div>
@@ -96,7 +96,7 @@ export default function ConectarPage() {
           </div>
         )}
         {msg && <div style={{ color: 'var(--coral)', fontSize: '.84rem', marginTop: 14 }}>{msg}</div>}
-        <button className="btn" style={{ background: 'none', border: '1px solid var(--line)', marginTop: 16 }} onClick={carregar} disabled={carregando}>
+        <button className="btn ghost" style={{ marginTop: 16 }} onClick={carregar} disabled={carregando}>
           Atualizar lista
         </button>
       </section>

@@ -41,6 +41,7 @@ export interface Chave {
 }
 
 export interface Loja {
+  id?: string; // id da linha (conta_ifood.id) — vem na lista admin; usado para remover
   merchantId: string;
   nome: string;
   soIntegracao?: boolean; // loja de teste de integração (admin): não varrida, invisível ao lojista
@@ -252,8 +253,9 @@ export const api = {
     listar: () => req<{ lojas: Loja[] }>('v1/lojas'),
     disponiveis: () => req<{ lojas: Loja[] }>('v1/lojas/disponiveis'),
     adicionar: (merchantId: string, nome: string, soIntegracao = false) =>
-      req<{ ok: boolean }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome, soIntegracao }) }),
-    remover: (merchantId: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(merchantId)}`, { method: 'DELETE' }),
+      req<{ ok: boolean; erro?: string }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome, soIntegracao }) }),
+    // remove pelo id da linha (conta_ifood.id), não pelo merchant
+    remover: (id: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   },
   // As lojas do iFood DA CONTA do usuário logado (sessão). Isolado por tenant no backend.
   minhasLojas: {

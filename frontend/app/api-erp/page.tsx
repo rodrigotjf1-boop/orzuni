@@ -48,16 +48,20 @@ export default function ApiErpPage() {
 
   async function addLoja() {
     if (!lojaMerchant.trim()) return;
-    await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja', lojaTeste);
+    const r = await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja', lojaTeste);
+    if (!r.ok) {
+      toast(r.erro || 'Não foi possível adicionar a loja.');
+      return;
+    }
     setLojaMerchant('');
     setLojaNome('');
     toast(lojaTeste ? 'Loja de teste de integração adicionada.' : 'Loja adicionada.');
     setLojaTeste(false);
     carregar();
   }
-  async function removerLoja(m: string, nome: string) {
+  async function removerLoja(id: string, nome: string) {
     if (!confirm(`Remover a loja "${nome}" do Orzuni?`)) return;
-    await api.lojas.remover(m);
+    await api.lojas.remover(id);
     toast('Loja removida.');
     carregar();
   }
@@ -136,7 +140,7 @@ export default function ApiErpPage() {
               </div>
               <div className="mono" style={{ color: 'var(--dim)', fontSize: '.66rem', textTransform: 'none', marginTop: 2 }}>merchant {l.merchantId}</div>
             </div>
-            <button className="btn ghost mini" onClick={() => removerLoja(l.merchantId, l.nome)}>
+            <button className="btn ghost mini" disabled={!l.id} onClick={() => l.id && removerLoja(l.id, l.nome)}>
               Remover
             </button>
           </div>
