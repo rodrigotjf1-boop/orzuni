@@ -69,6 +69,9 @@ Toda tool que grava exige o argumento `chaveIdempotencia` (8–100 chars). A loj
 | `complemento_preco_definir` | `preco.escrever` | PATCH `/complementos/opcao/{id}/preco` (todas com o código) | `{ codigo_pdv, valor, chaveIdempotencia }` — **1 preço por código de PDV → todas as opções com esse código, em todos os grupos** |
 | `complemento_pausar`  | `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
 | `complemento_reativar`| `status.escrever` | PATCH `/complementos/opcao/{id}/status` | `{ codigo_pdv \| opcao_id, chaveIdempotencia }` (exatamente um) |
+| `item_editar`         | `catalogo.escrever` | PUT `/items` (nome/descrição do produto) | `{ codigo_pdv, nome?, descricao?, chaveIdempotencia }` — ao menos um de nome/descrição; **nome ≤ 100, descrição ≤ 500**; resposta lista `dados.campos:[{campo,antes,depois}]` (R3) |
+| `complemento_nome_definir` | `catalogo.escrever` | PUT `/products/{id}` (nome da opção) | `{ codigo_pdv \| opcao_id, nome, chaveIdempotencia }` — renomeia TODAS as opções com o código (como o preço); **nome ≤ 100**; resposta lista cada opção (R3) |
+| `item_codigo_pdv_definir` | `catalogo.escrever` | PUT `/items` (externalCode) | `{ codigo_pdv, codigo_pdv_novo, chaveIdempotencia }` — recusa `codigo_ja_existe` se o novo já está em uso; resposta `dados:{de,para}` (R3) |
 | `interrupcao_criar`   | `loja.escrever`   | POST `/loja/interrupcoes`   | `{ inicio, fim, descricao?, chaveIdempotencia }` (pausa a LOJA; duração 1 min–7 dias; devolve `interrupcao_id`, início, fim e descrição; 409 → `interrupcao_sobreposta` + a pausa que já vale) |
 | `interrupcao_remover` | `loja.escrever`   | DELETE `/loja/interrupcoes/{id}` | `{ interrupcao_id, chaveIdempotencia }` — "reabrir agora"; **idempotente** (já removida/inexistente = sucesso) |
 
@@ -81,11 +84,12 @@ iFood desta loja.`) —, **nunca o JSON**. Quem precisa dos campos (`situacao`/`
 - `situacao`: `aplicado` · `sem_mudanca` · `nao_encontrado` · `parcial` · `recusado`.
 - `repetido`: `true` quando a resposta veio da MESMA `chaveIdempotencia` (não gravou de novo).
 - `antes` / `depois`: o preço antes e depois (nas tools de preço de item).
-- `opcoes`: `[{ grupo, optionId, antes?, depois?, situacao }]` — cada opção tocada por `complemento_preco_definir`/`_pausar`/`_reativar` por código de PDV, inclusive as `sem_mudanca`.
-- `dados`: extras da tool (ex.: `batchId`, `lote_assincrono`, `ignorados` em `precos_em_massa`).
+- `opcoes`: `[{ grupo, optionId, antes?, depois?, situacao }]` — cada opção tocada por `complemento_preco_definir`/`_pausar`/`_reativar`/`complemento_nome_definir` por código de PDV, inclusive as `sem_mudanca`.
+- `dados`: extras da tool (ex.: `batchId`/`ignorados` em `precos_em_massa`; `campos:[{campo,antes,depois}]` em `item_editar`; `{de,para}` em `item_codigo_pdv_definir`).
 - Recusa (`situacao` `nao_encontrado`/`recusado` → também `isError: true`): `codigo` distinto + `pode_repetir`.
-  Códigos: `pdv_inexistente` (não repetir) · `ifood_indisponivel` (**pode repetir**) · `dados_invalidos` ·
-  `conflito` · `erro_ifood` · `erro_interno` (pode repetir) · `chave_reutilizada` (chaveIdempotencia reusada com outro pedido).
+  Códigos: `pdv_inexistente` (não repetir) · `ifood_indisponivel` (**pode repetir**) · `dados_invalidos` (nome >100 / descrição >500 devolvem o limite na frase) ·
+  `conflito` · `erro_ifood` · `erro_interno` (pode repetir) · `chave_reutilizada` (chaveIdempotencia reusada com outro pedido) ·
+  `codigo_ja_existe` (R3, `item_codigo_pdv_definir`: o novo código já está em uso) · `opcao_inexistente` (R3, `complemento_nome_definir` por `opcao_id`).
   Pausa da loja (interrupção): `interrupcao_sobreposta` (não repetir; `dados.interrupcao` = a pausa que já vale: id, início, fim, descrição) ·
   `interrupcao_duracao_invalida` (fora de 1 min–7 dias) · `interrupcao_datas_invalidas` (início/fim não-ISO) · `interrupcao_recem_criada` (**pode repetir**; criada há pouco, aguarde para remover).
 - "Loja fechada/desligada" **não** é um código de tool: a loja revogada no Orzuni dá **403 `conta-bloqueada`**
@@ -120,9 +124,10 @@ LADO DA PORTA (o id não envelhece no Regem). A resposta lista cada opção (gru
 **não são ligáveis por código** — isso é material da conciliação (R3).
 
 ## Saída das leituras (para o R3 do Regem)
-- `cardapio_listar` → `{ itens: [{ pdv, nome, categoria, preco, promo:{de}|null, status:'no_ar'|'pausado', imagem }] }` (lista inteira, **sem paginação**).
-- `complementos_listar` → `{ grupos: [{ id, nome, tipo, min, max, opcoes:[{ id(=optionId), nome, preco, status, pdv, imagem }], itens:[{ nome, pdv }] }] }` (sem paginação).
-- `item_ler` → detalhe do item + `complementos:[{ grupo, obrigatorio, min, max, opcoes:[{ nome, status, preco, pdv, imagem }] }]`.
+- `cardapio_listar` → `{ itens: [{ pdv, nome, descricao, categoria, preco, promo:{de}|null, status:'no_ar'|'pausado', imagem, ordem }] }` (lista inteira, **sem paginação**; `ordem` = posição na ordem do iFood, 0,1,2…; `descricao` = o que está no iFood — R3).
+- `categorias_listar` → `{ categorias: [{ nome, template, itens, ordem }] }` (`ordem` = posição no iFood — R3).
+- `complementos_listar` → `{ grupos: [{ id, nome, tipo, min, max, ordem, opcoes:[{ id(=optionId), nome, preco, status, pdv, imagem, ordem }], itens:[{ nome, pdv }] }] }` (sem paginação; `ordem` dos grupos e das opções = ordem do iFood — R3).
+- `item_ler` → detalhe do item (inclui `descricao`) + `complementos:[{ grupo, obrigatorio, min, max, opcoes:[{ nome, status, preco, pdv, imagem }] }]`.
 - `contexto`: `DEFAULT` (o padrão que o Regem usa), mais `INDOOR`/`WHITELABEL` quando a loja tiver.
 - **Limite:** 120 chamadas/min por ligação; estouro → 429 `limite-de-chamadas` com `Retry-After`.
 
@@ -159,3 +164,8 @@ O produto entra no hub pelo `ClienteHub` do pacote comum (`backend/src/hub/`), *
   `interrupcoes_listar` novas; `interrupcao_criar` passa a devolver o `interrupcao_id`/início/fim/descrição e,
   no 409, a pausa que já vale. Contrato **1.1.0** (aditivo). Reusa `loja.ler`/`loja.escrever` (sem permissão
   nova). O Regem faz "+10/+30" com remover + criar.
+- **O8** — R3 (Gestão do catálogo do Regem): `item_editar` (nome/descrição do item), `complemento_nome_definir`
+  (nome da opção, por código ou id), `item_codigo_pdv_definir` (troca do código, recusa `codigo_ja_existe`) —
+  todas em `catalogo.escrever`; e nas leituras `ordem` (cardápio, categorias, grupos e opções) + `descricao`
+  (cardápio). Contrato **1.2.0** (aditivo). O nome da opção renomeia o PRODUTO da opção (`PUT /products/{id}`,
+  propaga a todos os itens que a usam) — sem trocar o id. O Regem edita e testa contra os exemplos deste doc.

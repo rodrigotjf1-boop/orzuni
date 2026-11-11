@@ -294,6 +294,74 @@ const complementoReativar: Ferramenta = {
   },
 };
 
+const itemEditar: Ferramenta = {
+  nome: 'item_editar',
+  escopo: 'catalogo.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'item_editar',
+      {
+        title: 'Editar nome e descrição de um item',
+        description: 'Muda o nome e/ou a descrição de UM item no iFood, pelo código de PDV (informe ao menos um dos dois). Nome até 100, descrição até 500 caracteres. A resposta lista os campos alterados (antes → depois).',
+        inputSchema: z.object({
+          codigo_pdv: CODIGO_PDV,
+          nome: z.string().max(100).optional().describe('O novo nome do item (até 100 caracteres).'),
+          descricao: z.string().max(500).optional().describe('A nova descrição do item (até 500 caracteres).'),
+          chaveIdempotencia: CHAVE_IDEMPOTENCIA,
+        }),
+      },
+      async ({ codigo_pdv, nome, descricao, chaveIdempotencia }) =>
+        escrita(c.quem, 'item_editar', chaveIdempotencia, { codigo_pdv, nome, descricao }, () => c.servicos.catalogo.definirNomeDescricaoItem(c.quem.merchantId, codigo_pdv, { nome, descricao })),
+    );
+  },
+};
+
+const complementoNomeDefinir: Ferramenta = {
+  nome: 'complemento_nome_definir',
+  escopo: 'catalogo.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'complemento_nome_definir',
+      {
+        title: 'Renomear uma opção de complemento',
+        description: 'Muda o nome de uma opção de complemento no iFood, pelo código de PDV (todas as opções com o código, em todos os grupos) ou pelo id da opção. Nome até 100 caracteres. A resposta lista cada opção.',
+        inputSchema: z.object({
+          codigo_pdv: z.string().min(1).max(100).optional().describe('O código de PDV da opção: renomeia TODAS as opções com esse código.'),
+          opcao_id: z.string().min(1).optional().describe('O id de UMA opção no iFood (alternativa ao codigo_pdv).'),
+          nome: z.string().min(1).max(100).describe('O novo nome da opção (até 100 caracteres).'),
+          chaveIdempotencia: CHAVE_IDEMPOTENCIA,
+        }),
+      },
+      async ({ codigo_pdv, opcao_id, nome, chaveIdempotencia }) =>
+        exigirUmAlvo(codigo_pdv, opcao_id) ??
+        escrita(c.quem, 'complemento_nome_definir', chaveIdempotencia, { codigo_pdv, opcao_id, nome }, () =>
+          codigo_pdv ? c.servicos.catalogo.definirNomeComplementoPorPdv(c.quem.merchantId, codigo_pdv, nome) : c.servicos.catalogo.definirNomeOpcao(c.quem.merchantId, opcao_id!, nome),
+        ),
+    );
+  },
+};
+
+const itemCodigoPdvDefinir: Ferramenta = {
+  nome: 'item_codigo_pdv_definir',
+  escopo: 'catalogo.escrever',
+  registrar(servidor, c) {
+    servidor.registerTool(
+      'item_codigo_pdv_definir',
+      {
+        title: 'Trocar o código de PDV de um item',
+        description: 'Troca o código de PDV de um item no iFood. Recusa com codigo_ja_existe se o novo código já estiver em uso em outro item.',
+        inputSchema: z.object({
+          codigo_pdv: CODIGO_PDV,
+          codigo_pdv_novo: z.string().min(1).max(100).describe('O novo código de PDV do item.'),
+          chaveIdempotencia: CHAVE_IDEMPOTENCIA,
+        }),
+      },
+      async ({ codigo_pdv, codigo_pdv_novo, chaveIdempotencia }) =>
+        escrita(c.quem, 'item_codigo_pdv_definir', chaveIdempotencia, { codigo_pdv, codigo_pdv_novo }, () => c.servicos.catalogo.definirCodigoPdvItem(c.quem.merchantId, codigo_pdv, codigo_pdv_novo)),
+    );
+  },
+};
+
 const interrupcaoCriar: Ferramenta = {
   nome: 'interrupcao_criar',
   escopo: 'loja.escrever',
@@ -375,6 +443,9 @@ export const FERRAMENTAS: readonly Ferramenta[] = [
   complementoPrecoDefinir,
   complementoPausar,
   complementoReativar,
+  itemEditar,
+  complementoNomeDefinir,
+  itemCodigoPdvDefinir,
   interrupcaoCriar,
   interrupcaoRemover,
 ];

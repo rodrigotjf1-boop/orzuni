@@ -99,6 +99,11 @@ async function subirPorta() {
   const pausarLojaPorta = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { interrupcao_id: 'int-1', inicio: '2026-11-10T14:00:00Z', fim: '2026-11-10T14:30:00Z', descricao: 'Pico' } }));
   const removerPausaPorta = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { interrupcao_id: 'int-1', removida: true } }));
   const interrupcoesLoja = jest.fn(async () => [{ id: 'int-1', descricao: 'Pico', inicio: '2026-11-10T14:00:00Z', fim: '2026-11-10T14:30:00Z' }]);
+  // R3 (gestão do catálogo): nome/descrição do item, troca de código, nome da opção
+  const definirNomeDescricaoItem = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { campos: [{ campo: 'nome', antes: 'X-Burger', depois: 'X-Bacon' }] } }));
+  const definirCodigoPdvItem = jest.fn(async () => ({ situacao: 'aplicado' as const, dados: { de: '2051', para: '9001' } }));
+  const definirNomeComplementoPorPdv = jest.fn(async () => ({ situacao: 'aplicado' as const, opcoes: [{ grupo: 'Adicionais', optionId: 'o1', situacao: 'aplicado' as const }] }));
+  const definirNomeOpcao = jest.fn(async () => ({ situacao: 'aplicado' as const, opcoes: [{ grupo: 'Adicionais', optionId: 'o1', situacao: 'aplicado' as const }] }));
 
   @Module({
     controllers: [McpController, DmsIdController, ManifestoController],
@@ -121,6 +126,10 @@ async function subirPorta() {
           definirStatusOpcao: jest.fn(async () => ({ situacao: 'aplicado' })),
           definirPrecoComplementoPorPdv,
           definirStatusComplementoPorPdv: jest.fn(async () => ({ situacao: 'aplicado', opcoes: [] })),
+          definirNomeDescricaoItem,
+          definirCodigoPdvItem,
+          definirNomeComplementoPorPdv,
+          definirNomeOpcao,
           reprecificar: jest.fn(async () => ({ batchId: 'b', ignorados: [] })),
         },
       },
@@ -151,6 +160,10 @@ async function subirPorta() {
     pausarLojaPorta,
     removerPausaPorta,
     interrupcoesLoja,
+    definirNomeDescricaoItem,
+    definirCodigoPdvItem,
+    definirNomeComplementoPorPdv,
+    definirNomeOpcao,
     ligacao(escopos: string[], merchantId: string) {
       const { chave } = gerarChave('lg', 'orzuni');
       ligacoes.set(chave, { id: `lig-${(n += 1)}`, aplicativo: APP_A, classe: 'dms', escopos, revogadaEm: null, merchantId });
@@ -281,6 +294,52 @@ describe('a porta MCP do Orzuni — idempotência, isolamento e tools/list', () 
     expect(r.corpo.result.isError).toBeUndefined();
     expect(p.interrupcoesLoja).toHaveBeenCalledWith('m9');
     expect(JSON.parse(r.corpo.result.content[0].text).interrupcoes[0]).toMatchObject({ id: 'int-1', descricao: 'Pico' });
+  });
+
+  it('as ferramentas R3 aparecem no tools/list com catalogo.escrever (e não sem)', async () => {
+    const comEscopo = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm1'), 'tools/list');
+    const nomes = (comEscopo.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(nomes).toEqual(expect.arrayContaining(['item_editar', 'complemento_nome_definir', 'item_codigo_pdv_definir']));
+    const semEscopo = await chamar(p.origem, dmsId.emitir(), p.ligacao(['catalogo.ler'], 'm1'), 'tools/list');
+    const nomesLer = (semEscopo.corpo.result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(nomesLer).not.toContain('item_editar');
+    expect(nomesLer).not.toContain('item_codigo_pdv_definir');
+  });
+
+  it('item_editar edita nome/descrição e responde pt-BR (§6)', async () => {
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm7'), 'tools/call', 'item_editar', {
+      codigo_pdv: '2051',
+      nome: 'X-Bacon',
+      descricao: 'novo',
+      chaveIdempotencia: 'edit-0001',
+    });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.definirNomeDescricaoItem).toHaveBeenCalledWith('m7', '2051', { nome: 'X-Bacon', descricao: 'novo' });
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado' });
+    expect(r.corpo.result.content[0].text).toMatch(/Nome\/descrição do item atualizados no iFood\./);
+    expect(() => JSON.parse(r.corpo.result.content[0].text)).toThrow();
+  });
+
+  it('item_codigo_pdv_definir troca o código e responde pt-BR', async () => {
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm7'), 'tools/call', 'item_codigo_pdv_definir', {
+      codigo_pdv: '2051',
+      codigo_pdv_novo: '9001',
+      chaveIdempotencia: 'codigo-01',
+    });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.definirCodigoPdvItem).toHaveBeenCalledWith('m7', '2051', '9001');
+    expect(r.corpo.result.content[0].text).toMatch(/Código de PDV alterado de 2051 para 9001\./);
+  });
+
+  it('complemento_nome_definir pelo código renomeia as opções', async () => {
+    const r = await chamar(p.origem, dmsId.emitir({ scope: 'catalogo.escrever' }), p.ligacao(['catalogo.escrever'], 'm7'), 'tools/call', 'complemento_nome_definir', {
+      codigo_pdv: '900',
+      nome: 'Bacon artesanal',
+      chaveIdempotencia: 'nome-0001',
+    });
+    expect(r.corpo.result.isError).toBeUndefined();
+    expect(p.definirNomeComplementoPorPdv).toHaveBeenCalledWith('m7', '900', 'Bacon artesanal');
+    expect(r.corpo.result.structuredContent).toMatchObject({ situacao: 'aplicado' });
   });
 
   it('a ligação revoga a si mesma (DELETE /dms-id/ligacao) e a revogada não entra na chamada seguinte', async () => {

@@ -53,11 +53,13 @@ export interface ResultadoEscrita {
 export interface ItemCanonico {
   pdv: string | null;
   nome: string;
+  descricao: string; // o que está no iFood (para a tela mostrar antes de mudar)
   categoria: string;
   preco: number;
   promo: { de: number } | null; // "de/por" (originalValue)
   status: 'no_ar' | 'pausado';
   imagem: string | null; // URL da foto (thumbnail), se houver
+  ordem: number; // posição no cardápio, na ordem do iFood (0,1,2…)
 }
 
 /**
@@ -90,6 +92,7 @@ export class CatalogoService {
     if (!cat) return [];
     const categorias = await this.ifood.categories(merchantId, cat.catalogId);
     const out: ItemCanonico[] = [];
+    let ordem = 0; // ordem global = categorias na ordem do iFood, itens na ordem dentro de cada uma
     for (const c of categorias) {
       for (const it of c.items ?? []) {
         const ctx = it.contextModifiers?.find((m) => m.catalogContext === 'DEFAULT');
@@ -97,11 +100,13 @@ export class CatalogoService {
         out.push({
           pdv: this.pdv(it),
           nome: it.name ?? it.id,
+          descricao: (it as any).description ?? '',
           categoria: c.name,
           preco: preco?.value ?? 0,
           promo: preco?.originalValue && preco.originalValue > (preco.value ?? 0) ? { de: preco.originalValue } : null,
           status: this.noAr(it) ? 'no_ar' : 'pausado',
           imagem: (it as any).imagePath ?? null,
+          ordem: ordem++,
         });
       }
     }
@@ -262,11 +267,12 @@ export class CatalogoService {
    * TODAS as categorias do cardápio (inclusive VAZIAS) com template e nº de itens.
    * O seletor de categoria precisa disso — derivar dos itens esconde categorias vazias.
    */
-  async categorias(merchantId: string): Promise<Array<{ nome: string; template: string; itens: number }>> {
+  async categorias(merchantId: string): Promise<Array<{ nome: string; template: string; itens: number; ordem: number }>> {
     const [cat] = await this.ifood.catalogs(merchantId);
     if (!cat) return [];
     const cats = await this.ifood.categories(merchantId, cat.catalogId);
-    return cats.map((c) => ({ nome: c.name, template: (c as any).template ?? 'DEFAULT', itens: c.items?.length ?? 0 }));
+    // `ordem` = a posição na ordem do iFood (as categorias já vêm ordenadas)
+    return cats.map((c, i) => ({ nome: c.name, template: (c as any).template ?? 'DEFAULT', itens: c.items?.length ?? 0, ordem: i }));
   }
 
   /**
@@ -1063,7 +1069,7 @@ export class CatalogoService {
                 const o = flat.options?.find((x) => x.id === oid);
                 const prod = flat.products?.find((p) => p.id === o?.productId);
                 const codigo = o?.externalCode && !o.externalCode.startsWith('ORZ-') ? o.externalCode : '';
-                return { id: oid, nome: (prod as any)?.name ?? oid, preco: o?.price?.value ?? 0, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
+                return { id: oid, productId: o?.productId, nome: (prod as any)?.name ?? oid, preco: o?.price?.value ?? 0, status: o?.status === 'AVAILABLE' ? 'no_ar' : 'pausado', pdv: codigo, imagem: (prod as any)?.imagePath ?? '' };
               }),
               itens: [] as Array<{ nome: string; pdv: string | null }>,
               itemIds: [] as string[],
@@ -1081,13 +1087,16 @@ export class CatalogoService {
   /** Lista pública dos grupos de complemento (sem ids internos de item). */
   async complementos(merchantId: string) {
     const mapa = await this.mapaGrupos(merchantId);
-    return [...mapa.values()].map((g) => ({
+    // `ordem` = a ordem do iFood (grupos e opções pela posição). O `productId` interno
+    // de cada opção fica DE FORA da saída pública (só o rename, abaixo, o usa).
+    return [...mapa.values()].map((g, gi) => ({
       id: g.id,
       nome: g.nome,
       tipo: g.tipo,
       min: g.min,
       max: g.max,
-      opcoes: g.opcoes,
+      ordem: gi,
+      opcoes: (g.opcoes as any[]).map((o, oi) => ({ id: o.id, nome: o.nome, preco: o.preco, status: o.status, pdv: o.pdv, imagem: o.imagem, ordem: oi })),
       itens: g.itens,
     }));
   }
@@ -1319,6 +1328,90 @@ export class CatalogoService {
       }
     }
     return this.consolidar(opcoes, aplicadas, falhas, falhas ? { codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui atualizar uma ou mais opções no iFood.' } : null);
+  }
+
+  // ---- porta MCP R3: nome/descrição do item, troca de código PDV, nome da opção ----
+
+  /** Edita nome e/ou descrição de UM item por PDV; devolve os campos (antes/depois). */
+  async definirNomeDescricaoItem(merchantId: string, pdv: string, campos: { nome?: string; descricao?: string }): Promise<ResultadoEscrita> {
+    const nome = campos.nome !== undefined ? String(campos.nome).trim() : undefined;
+    const descricao = campos.descricao;
+    if (nome === undefined && descricao === undefined) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Informe o nome e/ou a descrição.' };
+    if (nome !== undefined && nome.length > 100) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'O nome do item deve ter até 100 caracteres.' };
+    if (descricao !== undefined && descricao.length > 500) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'A descrição do item deve ter até 500 caracteres.' };
+    const atual = await this.detalhe(merchantId, pdv);
+    if (!atual) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
+    const mudou: Array<{ campo: string; antes: string; depois: string }> = [];
+    if (nome !== undefined && nome !== atual.nome) mudou.push({ campo: 'nome', antes: atual.nome, depois: nome });
+    if (descricao !== undefined && descricao !== atual.descricao) mudou.push({ campo: 'descricao', antes: atual.descricao, depois: descricao });
+    if (!mudou.length) return { situacao: 'sem_mudanca' };
+    const r = await this.editar(merchantId, pdv, { ...(nome !== undefined ? { nome } : {}), ...(descricao !== undefined ? { descricao } : {}) });
+    if (r.ok) return { situacao: 'aplicado', dados: { campos: mudou } };
+    return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: false, erro: r.erros.join('; ') || 'Não foi possível editar o item no iFood.' };
+  }
+
+  /** Troca o código de PDV de um item; recusa se o novo já existe. */
+  async definirCodigoPdvItem(merchantId: string, pdv: string, novo: string): Promise<ResultadoEscrita> {
+    const novoPdv = String(novo ?? '').trim();
+    if (!novoPdv) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Informe o novo código de PDV.' };
+    if (novoPdv === pdv) return { situacao: 'sem_mudanca' };
+    if (await this.resolver(merchantId, novoPdv)) return { situacao: 'recusado', codigo: 'codigo_ja_existe', pode_repetir: false, erro: `O código de PDV "${novoPdv}" já existe no cardápio do iFood desta loja.` };
+    if (!(await this.resolver(merchantId, pdv))) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
+    const r = await this.editar(merchantId, pdv, { pdv: novoPdv });
+    if (r.ok) return { situacao: 'aplicado', dados: { de: pdv, para: novoPdv } };
+    return { situacao: 'recusado', codigo: 'erro_ifood', pode_repetir: false, erro: r.erros.join('; ') || 'Não foi possível trocar o código de PDV no iFood.' };
+  }
+
+  /** As opções-alvo do rename (com o productId interno), por código de PDV ou por id. */
+  private async alvosRename(merchantId: string, por: { codigoPdv?: string; optionId?: string }): Promise<Array<{ grupo: string; optionId: string; productId?: string; nome: string }>> {
+    const mapa = await this.mapaGrupos(merchantId);
+    const out: Array<{ grupo: string; optionId: string; productId?: string; nome: string }> = [];
+    for (const g of mapa.values())
+      for (const o of g.opcoes as any[]) if (por.codigoPdv ? o.pdv === por.codigoPdv : o.id === por.optionId) out.push({ grupo: g.nome, optionId: o.id, productId: o.productId, nome: o.nome });
+    return out;
+  }
+
+  private async renomearOpcoes(merchantId: string, alvos: Array<{ grupo: string; optionId: string; productId?: string; nome: string }>, nome: string): Promise<ResultadoEscrita> {
+    const opcoes: NonNullable<ResultadoEscrita['opcoes']> = [];
+    let aplicadas = 0;
+    let falhas = 0;
+    let recusa: { codigo: string; pode_repetir: boolean; erro: string } | null = null;
+    for (const a of alvos) {
+      if (a.nome === nome) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'sem_mudanca' });
+        continue;
+      }
+      const ok = a.productId ? await this.ifood.updateProduct(merchantId, a.productId, { name: nome }) : false;
+      if (ok) {
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'aplicado' });
+        aplicadas++;
+      } else {
+        recusa = { codigo: 'erro_ifood', pode_repetir: true, erro: 'Não consegui renomear uma ou mais opções no iFood.' };
+        opcoes.push({ grupo: a.grupo, optionId: a.optionId, situacao: 'recusado' });
+        falhas++;
+      }
+    }
+    return this.consolidar(opcoes, aplicadas, falhas, recusa);
+  }
+
+  /** Renomeia TODAS as opções com um código de PDV (1 nome por código, como o preço). */
+  async definirNomeComplementoPorPdv(merchantId: string, codigoPdv: string, nome: string): Promise<ResultadoEscrita> {
+    const n = String(nome ?? '').trim();
+    if (!n) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Informe o nome da opção.' };
+    if (n.length > 100) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'O nome da opção deve ter até 100 caracteres.' };
+    const alvos = await this.alvosRename(merchantId, { codigoPdv });
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Nenhuma opção de complemento com o código de PDV "${codigoPdv}" no iFood desta loja.` };
+    return this.renomearOpcoes(merchantId, alvos, n);
+  }
+
+  /** Renomeia UMA opção pelo id. */
+  async definirNomeOpcao(merchantId: string, optionId: string, nome: string): Promise<ResultadoEscrita> {
+    const n = String(nome ?? '').trim();
+    if (!n) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Informe o nome da opção.' };
+    if (n.length > 100) return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'O nome da opção deve ter até 100 caracteres.' };
+    const alvos = await this.alvosRename(merchantId, { optionId });
+    if (!alvos.length) return { situacao: 'nao_encontrado', codigo: 'opcao_inexistente', pode_repetir: false, erro: `Opção "${optionId}" não encontrada no iFood desta loja.` };
+    return this.renomearOpcoes(merchantId, alvos, n);
   }
 
   // resolve o PDV → item (itemId, productId, categoria) varrendo o catálogo
