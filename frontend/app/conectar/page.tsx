@@ -77,12 +77,12 @@ export default function ConectarPage() {
       <section className="card">
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Conectar uma loja</div>
         <div className="sub" style={{ marginBottom: 14 }}>
-          Para a loja aparecer aqui, autorize o Orzuni no seu iFood (no Portal do Parceiro, em Integrações). Depois é só escolher abaixo.
+          Por segurança, a conexão da sua loja do iFood é concluída pela <b>equipe do Orzuni</b> — você não precisa criar nada no iFood nem mexer em segredo. Fale com o suporte para ativar a sua loja.
         </div>
         {carregando ? (
           <div className="sub">Carregando…</div>
         ) : disponiveis.length === 0 ? (
-          <div className="sub">Nenhuma loja disponível para conectar. Autorize o Orzuni no iFood e atualize esta página.</div>
+          <div className="sub">Assim que a equipe conectar a sua loja, ela aparece em "Lojas conectadas" acima.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {disponiveis.map((l) => (

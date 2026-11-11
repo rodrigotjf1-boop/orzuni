@@ -96,13 +96,20 @@ export class ContaService {
   }
 
   /**
-   * Conecta uma loja AO TENANT do usuário logado (não TENANT_PADRAO). À prova de
-   * IDOR: recusa reivindicar uma loja já conectada a OUTRO tenant.
+   * (Re)conecta ao TENANT do usuário logado uma loja que JÁ é dele.
+   *
+   * 🔒 PROVA DE POSSE: sem o fluxo de autorização do iFood amarrado à conta, NINGUÉM
+   * reivindica uma loja por self-service — nem uma loja SEM dono. Senão qualquer
+   * cadastro novo tomaria a loja de quem autorizou o app e ainda não conectou, e
+   * passaria a mudar cardápio/preço/pausa dela. A conexão é concluída pela
+   * DISTRIBUIÇÃO (regra inviolável "a Regem conclui a integração"); aqui só o
+   * `dono === tenant` passa (reconectar a própria). Reabrir o self-service exige o
+   * fluxo de posse (autorização do iFood → conta), numa fase seguinte.
    */
   async adicionarNoTenant(tenant: string, merchantId: string, nome: string): Promise<{ ok: boolean; erro?: string }> {
     if (!this.store.temBanco) return { ok: false, erro: 'banco indisponível' };
     const dono = await this.tenantDoMerchant(merchantId);
-    if (dono && dono !== tenant) return { ok: false, erro: 'esta loja já está conectada a outra conta' };
+    if (dono !== tenant) return { ok: false, erro: 'A conexão da sua loja do iFood é concluída pela equipe do Orzuni. Fale com o suporte para ativar a sua loja.' };
     try {
       await this.store.query(
         `insert into conta_ifood (tenant_id, merchant_id, nome, status) values ($1,$2,$3,'connected')
@@ -117,23 +124,16 @@ export class ContaService {
   }
 
   /**
-   * Lojas autorizadas no iFood ao app do Orzuni que ESTE tenant ainda pode conectar:
-   * tira as que já são minhas e ESCONDE as já reivindicadas por outro tenant (anti-IDOR).
-   * ⚠️ Uma loja autorizada ao app e ainda SEM dono aparece para quem a descobrir —
-   * a verificação de posse real (o usuário autorizou ESSE merchant no iFood) é
-   * material de uma fase seguinte; por ora o conectar é do piloto/dono.
+   * As lojas que o lojista pode conectar por self-service.
+   *
+   * 🔒 FECHADO (prova de posse pendente): esta lista expunha a QUALQUER conta os nomes
+   * de todas as lojas que autorizaram o app no iFood e ainda não foram conectadas —
+   * e deixava reivindicá-las (ver `adicionarNoTenant`). Com o cadastro aberto isso é
+   * um sequestro de loja. Devolve **vazio** até existir o fluxo de autorização do
+   * iFood amarrado à conta; a conexão da loja é feita pela distribuição.
    */
-  async disponiveisParaTenant(tenant: string): Promise<Array<{ merchantId: string; nome: string }>> {
-    const todas = await this.descobrir();
-    const jaMinhas = new Set((await this.ativasDoTenant(tenant)).map((c) => c.merchantId));
-    const out: Array<{ merchantId: string; nome: string }> = [];
-    for (const m of todas) {
-      if (jaMinhas.has(m.merchantId)) continue;
-      const dono = await this.tenantDoMerchant(m.merchantId);
-      if (dono && dono !== tenant) continue;
-      out.push(m);
-    }
-    return out;
+  async disponiveisParaTenant(_tenant: string): Promise<Array<{ merchantId: string; nome: string }>> {
+    return [];
   }
 
   /**

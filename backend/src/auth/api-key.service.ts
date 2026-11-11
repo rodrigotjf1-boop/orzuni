@@ -32,9 +32,12 @@ export class ApiKeyService {
     if (!this.store.temBanco) return null;
     try {
       const rows = await this.store.query(
+        // chave LIGADA a uma loja só vale se a loja está conectada: desconectar a loja
+        // (status != 'connected') para a chave na hora. Chave da conta (sem loja) segue.
         `select k.id, k.escopos, k.rate_limit, c.merchant_id from api_key k
          left join conta_ifood c on c.id = k.conta_id
-         where k.hash = $1 and k.revogada_em is null limit 1`,
+         where k.hash = $1 and k.revogada_em is null
+           and (k.conta_id is null or c.status = 'connected') limit 1`,
         [sha256(token)],
       );
       if (!rows.length) return null;
