@@ -39,10 +39,22 @@ export class LojaController {
     return this.loja.painel(await this.merchant(req, loja));
   }
 
-  /** GET /v1/loja/lojas — lojas autorizadas ao app (paginação opcional page/size). */
+  /**
+   * GET /v1/loja/lojas — as lojas do usuário. Multi-tenant: SESSÃO vê só as do PRÓPRIO
+   * tenant (nunca `ifood.merchants()`, que são todas as do app — vazaria a loja de outro);
+   * chave ligada vê só a dela; o admin (chave sem loja) vê as do app (contexto de integração).
+   */
   @Requer('loja:ler')
   @Get('lojas')
-  async lojas(@Query('page') page?: string, @Query('size') size?: string) {
+  async lojas(@Req() req: any, @Query('page') page?: string, @Query('size') size?: string) {
+    if (req?.acesso === 'sessao') {
+      const minhas = await this.contas.ativasDoTenant(req.usuario.tenant);
+      return { lojas: minhas.map((m) => ({ id: m.merchantId, nome: m.nome, razaoSocial: m.nome })) };
+    }
+    if (req?.contaMerchant) {
+      const todas = await this.loja.lojas();
+      return { lojas: todas.filter((l) => l.id === req.contaMerchant) };
+    }
     return { lojas: await this.loja.lojas(page ? +page : undefined, size ? +size : undefined) };
   }
 
