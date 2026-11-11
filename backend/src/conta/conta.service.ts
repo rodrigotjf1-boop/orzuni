@@ -137,6 +137,34 @@ export class ContaService {
   }
 
   /**
+   * AÇÃO DA EQUIPE (admin): conecta uma loja do iFood à CONTA de um cliente, pelo e-mail —
+   * não ao TENANT_PADRAO. É o caminho de ativação desde que o self-service fechou (prova de
+   * posse): depois que o cliente se cadastra, a equipe liga a loja à conta dele. À prova de
+   * duplicata (recusa merchant já conectado a OUTRO tenant). Só admin (a rota tem AdminGuard).
+   */
+  async conectarLojaParaEmail(email: string, merchantId: string, nome: string): Promise<{ ok: boolean; erro?: string }> {
+    if (!this.store.temBanco) return { ok: false, erro: 'banco indisponível' };
+    const e = (email ?? '').trim().toLowerCase();
+    if (!e) return { ok: false, erro: 'informe o e-mail da conta do cliente' };
+    const alvo = await this.store.query(`select tenant_id from usuario where lower(email) = $1 limit 1`, [e]);
+    const tenant = alvo[0]?.tenant_id as string | undefined;
+    if (!tenant) return { ok: false, erro: 'não encontrei uma conta com esse e-mail' };
+    const dono = await this.tenantDoMerchant(merchantId);
+    if (dono && dono !== tenant) return { ok: false, erro: 'esta loja já está conectada a outra conta' };
+    try {
+      await this.store.query(
+        `insert into conta_ifood (tenant_id, merchant_id, nome, status) values ($1,$2,$3,'connected')
+         on conflict (tenant_id, merchant_id) do update set nome = excluded.nome, status = 'connected'`,
+        [tenant, merchantId, nome],
+      );
+      return { ok: true };
+    } catch (err: any) {
+      this.logger.warn(`conectarLojaParaEmail falhou: ${err?.message ?? err}`);
+      return { ok: false, erro: 'não foi possível conectar a loja' };
+    }
+  }
+
+  /**
    * Registra/atualiza uma loja no TENANT_PADRAO (admin). `soIntegracao` marca a loja de
    * teste do kit. À prova de duplicata: recusa um merchant JÁ conectado em OUTRO tenant
    * (a mesma trava do `adicionarNoTenant`) — senão o vigia varreria a loja duas vezes e

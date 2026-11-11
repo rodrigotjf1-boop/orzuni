@@ -252,8 +252,8 @@ export const api = {
   lojas: {
     listar: () => req<{ lojas: Loja[] }>('v1/lojas'),
     disponiveis: () => req<{ lojas: Loja[] }>('v1/lojas/disponiveis'),
-    adicionar: (merchantId: string, nome: string, soIntegracao = false) =>
-      req<{ ok: boolean; erro?: string }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome, soIntegracao }) }),
+    adicionar: (merchantId: string, nome: string, soIntegracao = false, email?: string) =>
+      req<{ ok: boolean; erro?: string }>('v1/lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome, soIntegracao, ...(email ? { email } : {}) }) }),
     // remove pelo id da linha (conta_ifood.id), não pelo merchant
     remover: (id: string) => req<{ ok: boolean }>(`v1/lojas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   },

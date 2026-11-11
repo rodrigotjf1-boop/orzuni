@@ -26,6 +26,7 @@ export default function ApiErpPage() {
   const [lojaMerchant, setLojaMerchant] = useState('');
   const [lojaNome, setLojaNome] = useState('');
   const [lojaTeste, setLojaTeste] = useState(false);
+  const [lojaEmail, setLojaEmail] = useState('');
   // editar escopos de uma chave existente
   const [editId, setEditId] = useState<string | null>(null);
   const [editEsc, setEditEsc] = useState<string[]>([]);
@@ -48,15 +49,18 @@ export default function ApiErpPage() {
 
   async function addLoja() {
     if (!lojaMerchant.trim()) return;
-    const r = await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja', lojaTeste);
+    const email = lojaEmail.trim();
+    // com e-mail → conecta à conta do cliente; sem e-mail → conta da distribuição (teste/padrão)
+    const r = await api.lojas.adicionar(lojaMerchant.trim(), lojaNome.trim() || 'loja', email ? false : lojaTeste, email || undefined);
     if (!r.ok) {
-      toast(r.erro || 'Não foi possível adicionar a loja.');
+      toast(r.erro || 'Não foi possível conectar a loja.');
       return;
     }
     setLojaMerchant('');
     setLojaNome('');
-    toast(lojaTeste ? 'Loja de teste de integração adicionada.' : 'Loja adicionada.');
+    setLojaEmail('');
     setLojaTeste(false);
+    toast(email ? `Loja conectada à conta de ${email}.` : lojaTeste ? 'Loja de teste de integração adicionada.' : 'Loja adicionada.');
     carregar();
   }
   async function removerLoja(id: string, nome: string) {
@@ -126,7 +130,7 @@ export default function ApiErpPage() {
       {/* lojas */}
       <div style={card}>
         <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 6 }}>Lojas</h2>
-        <div className="sub" style={{ marginBottom: 16 }}>Cada loja é um merchant do iFood que autorizou o Orzuni. O vigia varre as lojas reais; a de <b>teste de integração</b> fica de fora (não bate no iFood) e não aparece para o lojista. A chave pode ficar ligada a uma delas.</div>
+        <div className="sub" style={{ marginBottom: 16 }}>Cada loja é um merchant do iFood que autorizou o Orzuni. Para <b>ativar um cliente</b>, informe o <b>e-mail da conta</b> dele ao adicionar — a loja liga à conta dele. Sem e-mail, fica na conta da distribuição (ex.: loja de <b>teste de integração</b>, que o vigia não varre e o lojista não vê). A chave pode ficar ligada a uma delas.</div>
         {lojas.map((l) => (
           <div key={l.merchantId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -148,8 +152,9 @@ export default function ApiErpPage() {
         <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...box, flex: 2, minWidth: 220, fontFamily: 'var(--font-mono)', fontSize: '.8rem' }} placeholder="merchantId (UUID do iFood)" value={lojaMerchant} onChange={(e) => setLojaMerchant(e.target.value)} />
           <input style={{ ...box, flex: 1, minWidth: 120 }} placeholder="Nome" value={lojaNome} onChange={(e) => setLojaNome(e.target.value)} />
-          <label className="sub" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.78rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <input type="checkbox" checked={lojaTeste} onChange={(e) => setLojaTeste(e.target.checked)} />
+          <input type="email" style={{ ...box, flex: 1, minWidth: 180 }} placeholder="E-mail da conta do cliente (opcional)" value={lojaEmail} onChange={(e) => setLojaEmail(e.target.value)} autoComplete="off" />
+          <label className="sub" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.78rem', cursor: 'pointer', whiteSpace: 'nowrap', opacity: lojaEmail.trim() ? 0.4 : 1 }}>
+            <input type="checkbox" checked={lojaTeste} disabled={!!lojaEmail.trim()} onChange={(e) => setLojaTeste(e.target.checked)} />
             Loja de teste de integração
           </label>
           <button className="btn ghost mini" disabled={!lojaMerchant.trim()} onClick={addLoja}>

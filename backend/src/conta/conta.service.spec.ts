@@ -19,7 +19,18 @@ function comStore(donoDoMerchant: string | null) {
   return { svc, query };
 }
 
+function comStoreEmail(opts: { usuarioTenant: string | null; donoDoMerchant: string | null }) {
+  const query = jest.fn(async (sql: string) => {
+    if (String(sql).includes('from usuario where lower(email)')) return opts.usuarioTenant ? [{ tenant_id: opts.usuarioTenant }] : [];
+    if (String(sql).includes('select tenant_id from conta_ifood where merchant_id')) return opts.donoDoMerchant ? [{ tenant_id: opts.donoDoMerchant }] : [];
+    return [];
+  });
+  const svc = new ContaService({} as never, { temBanco: true, query } as never);
+  return { svc, query };
+}
+
 const insertFeito = (query: jest.Mock) => query.mock.calls.some((c) => String(c[0]).includes('insert into conta_ifood'));
+const insertTenant = (query: jest.Mock) => query.mock.calls.find((c) => String(c[0]).includes('insert into conta_ifood'))?.[1]?.[0];
 
 describe('ContaService.adicionar (admin) — recusa duplicata em outro tenant', () => {
   it('recusa um merchant já conectado em OUTRO tenant, sem inserir', async () => {
@@ -68,6 +79,33 @@ describe('ContaService — prova de posse (self-service fechado)', () => {
     const { svc, query } = comStore('tenant-A');
     expect(await svc.adicionarNoTenant('tenant-A', 'm1', 'Loja')).toEqual({ ok: true });
     expect(insertFeito(query)).toBe(true);
+  });
+});
+
+describe('ContaService.conectarLojaParaEmail (admin) — ativar um cliente', () => {
+  it('conecta a loja ao tenant do e-mail do cliente', async () => {
+    const { svc, query } = comStoreEmail({ usuarioTenant: 'tenant-cliente', donoDoMerchant: null });
+    expect(await svc.conectarLojaParaEmail('Cliente@Loja.com', 'm1', 'Burger do Zé')).toEqual({ ok: true });
+    expect(insertTenant(query)).toBe('tenant-cliente'); // NÃO o TENANT_PADRAO
+  });
+
+  it('e-mail sem conta → recusa, sem inserir', async () => {
+    const { svc, query } = comStoreEmail({ usuarioTenant: null, donoDoMerchant: null });
+    const r = await svc.conectarLojaParaEmail('ninguem@x.com', 'm1', 'Loja');
+    expect(r).toMatchObject({ ok: false });
+    expect(r.erro).toMatch(/e-mail/);
+    expect(insertFeito(query)).toBe(false);
+  });
+
+  it('loja já conectada a OUTRO tenant → recusa', async () => {
+    const { svc, query } = comStoreEmail({ usuarioTenant: 'tenant-cliente', donoDoMerchant: 'tenant-outro' });
+    expect((await svc.conectarLojaParaEmail('cliente@loja.com', 'm1', 'Loja')).ok).toBe(false);
+    expect(insertFeito(query)).toBe(false);
+  });
+
+  it('e-mail vazio → recusa', async () => {
+    const { svc } = comStoreEmail({ usuarioTenant: 'x', donoDoMerchant: null });
+    expect((await svc.conectarLojaParaEmail('  ', 'm1', 'Loja')).ok).toBe(false);
   });
 });
 
