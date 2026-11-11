@@ -181,6 +181,7 @@ por **código de PDV**.
 | `item_editar` | `catalogo.escrever` | muda nome e/ou descrição de um item (nome ≤ 100, descrição ≤ 500) |
 | `complemento_nome_definir` | `catalogo.escrever` | muda o nome de uma opção (por código ou id; ≤ 100) |
 | `item_codigo_pdv_definir` | `catalogo.escrever` | troca o código de PDV de um item (recusa se o novo já existe) |
+| `item_foto_definir` | `catalogo.escrever` | troca a foto de um item; `imagem` em data-URI JPEG/PNG, até 8 MB (quadrada, ≥ 300×300 px) |
 | `interrupcao_criar` | `loja.escrever` | pausa a LOJA inteira (duração 1 min–7 dias) |
 | `interrupcao_remover` | `loja.escrever` | remove uma pausa pelo id (idempotente) |
 
@@ -195,8 +196,8 @@ frase legível em pt-BR (no sucesso um resumo, na recusa o motivo), nunca o JSON
 - recusa (`nao_encontrado`/`recusado` → também `isError: true`): **`codigo`** distinto + **`pode_repetir`**
 
 Códigos de recusa: `pdv_inexistente` · `opcao_inexistente` · `codigo_ja_existe` · `dados_invalidos` ·
-`conflito` · `ifood_indisponivel` (pode repetir) · `erro_ifood` · `erro_interno` (pode repetir) ·
-`chave_reutilizada` (a mesma `chaveIdempotencia` com outro pedido).
+`imagem_grande` (foto acima de 8 MB) · `conflito` · `ifood_indisponivel` (pode repetir) · `erro_ifood` ·
+`erro_interno` (pode repetir) · `chave_reutilizada` (a mesma `chaveIdempotencia` com outro pedido).
 
 ### 2.7 Idempotência
 

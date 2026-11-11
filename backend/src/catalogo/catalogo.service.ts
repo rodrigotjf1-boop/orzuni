@@ -18,6 +18,15 @@ import {
   type Shift,
 } from './validacao';
 
+/**
+ * Teto da foto de item aceita pela porta (bytes decodificados do data-URI).
+ * O corpo do POST /v1/mcp é limitado a 12 MB (main.ts); base64 infla ~1,37× →
+ * 8 MB decodificados ≈ 10,9 MB de string, com folga para o envelope. O iFood
+ * recomenda JPEG/PNG quadrado, no mínimo 300×300 px; a dimensão quem valida é
+ * o iFood (devolve o erro se a imagem for pequena demais).
+ */
+export const FOTO_MAX_BYTES = 8 * 1024 * 1024;
+
 export interface ItemDetalhe {
   pdv: string;
   nome: string;
@@ -1355,6 +1364,10 @@ export class CatalogoService {
     const img = String(imagem ?? '').trim();
     if (!/^data:image\/(jpe?g|png);base64,/i.test(img))
       return { situacao: 'recusado', codigo: 'dados_invalidos', pode_repetir: false, erro: 'Envie a foto como data-URI (data:image/jpeg;base64,… ou png).' };
+    const b64 = img.slice(img.indexOf(',') + 1);
+    const bytes = b64 ? Math.floor((b64.length * 3) / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0) : 0;
+    if (bytes > FOTO_MAX_BYTES)
+      return { situacao: 'recusado', codigo: 'imagem_grande', pode_repetir: false, erro: `A foto tem ${(bytes / 1048576).toFixed(1)} MB. Envie uma imagem de até 8 MB (JPEG ou PNG, quadrada, no mínimo 300×300 px).` };
     if (!(await this.resolver(merchantId, pdv)))
       return { situacao: 'nao_encontrado', codigo: 'pdv_inexistente', pode_repetir: false, erro: `Código de PDV "${pdv}" não existe no cardápio do iFood desta loja.` };
     const r = await this.editar(merchantId, pdv, { imagem: img });

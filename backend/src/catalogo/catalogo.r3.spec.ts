@@ -3,7 +3,7 @@
  * código de PDV e nome da opção. Os métodos internos (detalhe/editar/resolver/mapaGrupos)
  * são espionados; o cliente iFood (updateProduct) é mockado. Sem rede.
  */
-import { CatalogoService } from './catalogo.service';
+import { CatalogoService, FOTO_MAX_BYTES } from './catalogo.service';
 
 function svc(ifood: Partial<Record<string, jest.Mock>> = {}) {
   return new CatalogoService(ifood as never);
@@ -102,6 +102,16 @@ describe('definirFotoItem', () => {
     const resolver = jest.spyOn(c as never as { resolver: jest.Mock }, 'resolver');
     const r = await c.definirFotoItem('m', '1', 'https://x.com/foto.jpg');
     expect(r).toMatchObject({ situacao: 'recusado', codigo: 'dados_invalidos' });
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it('recusa foto acima do teto antes de tocar no iFood (imagem_grande)', async () => {
+    const c = svc();
+    const resolver = jest.spyOn(c as never as { resolver: jest.Mock }, 'resolver');
+    const b64 = 'A'.repeat(Math.ceil(((FOTO_MAX_BYTES + 1024 * 1024) * 4) / 3)); // ~9 MB decodificados
+    const r = await c.definirFotoItem('m', '2051', `data:image/png;base64,${b64}`);
+    expect(r).toMatchObject({ situacao: 'recusado', codigo: 'imagem_grande', pode_repetir: false });
+    expect(r.erro).toMatch(/8 MB/);
     expect(resolver).not.toHaveBeenCalled();
   });
 
