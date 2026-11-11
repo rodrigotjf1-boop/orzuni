@@ -9,6 +9,25 @@
 export default function FundoLogin() {
   return (
     <div className="lbg" aria-hidden="true">
+      {/* ambiente: aurora que respira + sistema de órbitas (o motivo do logo) */}
+      <div className="lbg-aura lbg-aura1" />
+      <div className="lbg-aura lbg-aura2" />
+      <div className="lbg-aura lbg-aura3" />
+      <div className="lbg-orbit">
+        <span className="lbg-ring lbg-ring-a" />
+        <span className="lbg-ring lbg-ring-b" />
+        <span className="lbg-ring lbg-ring-c" />
+        <span className="lbg-orbiter lbg-orbiter-a">
+          <i className="lbg-planet" />
+        </span>
+        <span className="lbg-orbiter lbg-orbiter-b">
+          <i className="lbg-planet lbg-planet2" />
+        </span>
+        <span className="lbg-orbiter lbg-orbiter-c">
+          <i className="lbg-planet lbg-planet3" />
+        </span>
+      </div>
+
       {/* a ponte e os pacotes que viajam Regem → iFood */}
       <span className="lbg-pipe" />
       <span className="lbg-pkt lbg-pkt1">preço</span>
@@ -106,6 +125,8 @@ export default function FundoLogin() {
 
       {/* escurece o centro para o login ficar sempre legível */}
       <span className="lbg-vig" />
+      {/* grão fino para textura premium */}
+      <span className="lbg-grain" />
     </div>
   );
 }
