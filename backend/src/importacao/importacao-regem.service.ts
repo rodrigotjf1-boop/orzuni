@@ -5,12 +5,17 @@ import type { DadosItem } from '../catalogo/validacao';
 import { ContaService } from '../conta/conta.service';
 import { StoreService } from '../store/store.service';
 import { cifrar, decifrar } from '../common/cifra';
+import { type LojaDoRegem, RegemCliqueService } from './regem-clique.service';
 
 // IMPORTAÇÃO DO CARDÁPIO DO REGEM → iFood (pelo Orzuni), Fase 1. Contrato do Regem #854
 // (docs/integracao-orzuni.md do Regem): a API de integração de LEITURA do catálogo.
 //
 //   GET {BASE}/api/v1/integracao/catalogo?versao=<versao>
 //   Authorization: Bearer rgm_it_…   (token DA LOJA, emitido no console do Regem p/ "Orzuni")
+//
+// DESDE A MIGRATION 011 a conexão também nasce pelo CLIQUE ("Conectar pelo Regem", `regem-clique.service.ts`): aí a
+// credencial é a da via do DMS ID, `Authorization: Bearer <token do DMS ID do Orzuni>` + `DMS-Ligacao: dms_lg_regem_…`
+// (a ligação da loja, cifrada no mesmo campo). `conexao_regem.origem` diz qual das duas vale.
 //
 // A BASE é FIXA (não vem do usuário) — por padrão https://api.dmsregem.com, com override só pela
 // env da distribuição (homologação). O token vem do usuário e fica CIFRADO (common/cifra.ts).
@@ -144,18 +149,25 @@ export class ImportacaoRegemService {
     private readonly store: StoreService,
     private readonly contas: ContaService,
     private readonly catalogo: CatalogoService,
+    private readonly clique: RegemCliqueService,
   ) {}
 
-  /** Conecta a leitura do Regem: testa o token na API de integração e o guarda CIFRADO. */
+  /** Conecta a leitura do Regem pela CHAVE colada: testa o token na API de integração e o guarda CIFRADO. */
   async conectar(tenant: string, token: string): Promise<{ ok: boolean; produtos?: number; erro?: string }> {
     if (!this.store.temBanco) return { ok: false, erro: 'banco indisponível' };
     const segredo = (token ?? '').trim();
     if (!segredo) return { ok: false, erro: 'informe a chave de integração do Regem' };
-    const dados = await this.buscar(segredo); // valida a chave antes de salvar (401/403 lançam)
+    const dados = await this.buscar({ token: segredo, origem: 'chave' }); // valida a chave antes de salvar (401/403 lançam)
+    // A chave é de UMA loja que o Orzuni não sabe qual é: a conexão volta a ser "pela chave" (a loja do clique sai de uso
+    // e o resumo da outra loja não vale mais).
     await this.store.query(
       `insert into conexao_regem (tenant_id, base_url, token_cifrado)
        values ($1, $2, $3)
-       on conflict (tenant_id) do update set base_url = excluded.base_url, token_cifrado = excluded.token_cifrado, atualizado_em = now()`,
+       on conflict (tenant_id) do update
+         set base_url = excluded.base_url, token_cifrado = excluded.token_cifrado,
+             ultimo_resumo = case when conexao_regem.origem = 'clique' then null else conexao_regem.ultimo_resumo end,
+             ultima_importacao = case when conexao_regem.origem = 'clique' then null else conexao_regem.ultima_importacao end,
+             origem = 'chave', loja_regem_id = null, loja_regem_nome = null, atualizado_em = now()`,
       [tenant, REGEM_BASE, cifrar(segredo)],
     );
     return { ok: true, produtos: Array.isArray(dados?.produtos) ? dados.produtos.length : 0 };
@@ -168,7 +180,7 @@ export class ImportacaoRegemService {
     const merchant = lojas[0]?.merchantId;
     if (!merchant) throw new Error('conecte uma loja do iFood antes de importar');
 
-    const dados = await this.buscar(conexao.token, conexao.versaoAnterior);
+    const dados = await this.buscar(conexao, conexao.versaoAnterior);
 
     // "nada mudou desde a última importação" → nada a criar
     if (dados?.atualizado === false) {
@@ -209,15 +221,35 @@ export class ImportacaoRegemService {
     return resumo;
   }
 
-  /** Estado da conexão para a tela (conectado? última importação?). */
-  async status(tenant: string): Promise<{ conectado: boolean; ultimaImportacao?: string; ultimoResumo?: unknown }> {
-    const rows = await this.store.query(`select ultima_importacao, ultimo_resumo from conexao_regem where tenant_id = $1`, [tenant]);
-    if (!rows.length) return { conectado: false };
+  /**
+   * Estado da conexão para a tela: conectado? por onde (chave colada ou clique)? qual loja do Regem está em uso e
+   * quais a conta tem ligadas? o botão "Conectar pelo Regem" está disponível?
+   */
+  async status(tenant: string): Promise<{
+    conectado: boolean;
+    clique: boolean;
+    origem?: 'chave' | 'clique';
+    loja?: LojaDoRegem | null;
+    lojas?: LojaDoRegem[];
+    ultimaImportacao?: string;
+    ultimoResumo?: unknown;
+  }> {
+    const clique = this.clique.disponivel;
+    const rows = await this.store.query(
+      `select ultima_importacao, ultimo_resumo, origem, loja_regem_id, loja_regem_nome from conexao_regem where tenant_id = $1`,
+      [tenant],
+    );
+    if (!rows.length) return { conectado: false, clique };
     const resumo = rows[0].ultimo_resumo ?? undefined;
     // não devolve a `versao` interna do retrato para a tela
     if (resumo && typeof resumo === 'object') delete (resumo as Record<string, unknown>).versao;
+    const peloClique = rows[0].origem === 'clique';
     return {
       conectado: true,
+      clique,
+      origem: peloClique ? 'clique' : 'chave',
+      loja: peloClique && rows[0].loja_regem_id ? { id: rows[0].loja_regem_id, nome: rows[0].loja_regem_nome ?? 'Loja do Regem' } : null,
+      lojas: peloClique ? await this.clique.lojas(tenant) : [],
       ultimaImportacao: rows[0].ultima_importacao ?? undefined,
       ultimoResumo: resumo,
     };
@@ -225,27 +257,40 @@ export class ImportacaoRegemService {
 
   // ---- internos ----
 
-  private async conexaoDe(tenant: string): Promise<{ token: string; versaoAnterior?: string }> {
-    const rows = await this.store.query(`select token_cifrado, ultimo_resumo->>'versao' as versao from conexao_regem where tenant_id = $1`, [tenant]);
+  private async conexaoDe(tenant: string): Promise<{ token: string; origem: 'chave' | 'clique'; versaoAnterior?: string }> {
+    const rows = await this.store.query(`select token_cifrado, origem, ultimo_resumo->>'versao' as versao from conexao_regem where tenant_id = $1`, [tenant]);
     if (!rows.length) throw new Error('conecte o Regem antes de importar');
-    return { token: decifrar(rows[0].token_cifrado), versaoAnterior: rows[0].versao ?? undefined };
+    return { token: decifrar(rows[0].token_cifrado), origem: rows[0].origem === 'clique' ? 'clique' : 'chave', versaoAnterior: rows[0].versao ?? undefined };
   }
 
   /**
    * Busca o catálogo na API de integração do Regem (base FIXA, confiável). Com `versao`, pede só o
    * que mudou. Erros do Regem vêm em problem+json (401/403/429 com Retry-After) → frase pt-BR.
+   *
+   * A credencial segue a origem da conexão: a chave colada vai sozinha no `Authorization`; a do clique é o token do DMS
+   * ID do Orzuni com a ligação da loja no `DMS-Ligacao` (no 401, pede outro token ao DMS ID e tenta uma vez mais).
    */
-  private async buscar(token: string, versao?: string): Promise<RespostaCatalogo> {
+  private async buscar(conexao: { token: string; origem: 'chave' | 'clique' }, versao?: string): Promise<RespostaCatalogo> {
     const url = `${REGEM_BASE}${CAMINHO_CATALOGO}` + (versao ? `?versao=${encodeURIComponent(versao)}` : '');
+    const peloClique = conexao.origem === 'clique';
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 15_000);
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}`, accept: 'application/json' },
-        redirect: 'manual',
-        signal: ctrl.signal,
-      });
+      const chamar = async () =>
+        this.clique.buscar(url, {
+          headers: { ...(peloClique ? await this.clique.cabecalhos(conexao.token) : { Authorization: `Bearer ${conexao.token}` }), accept: 'application/json' },
+          redirect: 'manual',
+          signal: ctrl.signal,
+        });
+      let res = await chamar();
+      if (res.status === 401 && peloClique) {
+        this.clique.esquecerToken();
+        res = await chamar();
+      }
       if (res.status >= 300 && res.status < 400) throw new Error('o endereço do Regem redirecionou (não permitido)');
+      if ((res.status === 401 || res.status === 403) && peloClique) {
+        throw new Error('a conexão com o Regem não vale mais: ela pode ter sido desligada lá. Conecte de novo pelo botão "Conectar pelo Regem".');
+      }
       if (res.status === 401 || res.status === 403) throw new Error('a chave de integração do Regem é inválida ou não tem permissão');
       if (res.status === 429) {
         const espera = Number(res.headers.get('retry-after') || 0);
