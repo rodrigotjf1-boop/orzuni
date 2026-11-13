@@ -14,6 +14,7 @@ import { CatalogoService } from '../catalogo/catalogo.service';
 import { LojaService } from '../loja/loja.service';
 import { StoreService } from '../store/store.service';
 import { porta } from './config';
+import { AutorizacaoService } from './autorizacao.service';
 import { DmsIdController } from './dms-id.controller';
 import { DmsIdService } from './dms-id.service';
 import { IntegracaoGuard } from './integracao.guard';
@@ -113,6 +114,8 @@ async function subirPorta() {
       IntegracaoGuard,
       DmsIdService,
       { provide: LigacaoService, useValue: { autenticarLigacao, trocarPorLigacao: jest.fn(), revogarPeloProprio } },
+      // A autorização por clique tem o teste próprio (autorizacao.pg.spec.ts); aqui só completa o controlador.
+      { provide: AutorizacaoService, useValue: { pedir: jest.fn(), trocar: jest.fn() } },
       HubService,
       RegistroDaPorta,
       {

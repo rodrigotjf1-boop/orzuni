@@ -16,8 +16,13 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api/orzuni')) {
     return NextResponse.json({ error: 'não autenticado' }, { status: 401 });
   }
+  // Depois de entrar, a pessoa volta à página que pediu (a autorização por clique chega aqui com o número do pedido).
+  // O login só aceita endereço interno (`proximoInterno`), então isto não vira redirecionamento aberto.
   const url = req.nextUrl.clone();
+  const pedido = `${pathname}${req.nextUrl.search}`;
   url.pathname = '/login';
+  url.search = '';
+  if (pathname !== '/') url.searchParams.set('proximo', pedido);
   return NextResponse.redirect(url);
 }
 

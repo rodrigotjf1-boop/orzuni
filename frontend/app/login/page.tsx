@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import FundoLogin from './fundo-login';
+import { proximoInterno } from '@/lib/proximo';
 
 const campo: React.CSSProperties = {
   width: '100%',
@@ -34,7 +35,8 @@ export default function LoginPage() {
         body: JSON.stringify({ modo: 'login', email, senha }),
       });
       if (res.ok) {
-        router.replace('/vigia');
+        // Volta à página que pediu (a autorização por clique, por exemplo), só se for interna.
+        router.replace(proximoInterno(new URLSearchParams(window.location.search).get('proximo')));
         router.refresh();
       } else {
         const j = await res.json().catch(() => ({}));

@@ -14,6 +14,44 @@
 - Recurso/`aud` (DMS ID) = `https://api.orzuni.com/v1/mcp` — o MESMO texto na porta, no DMS ID e no `resource` dos metadados (senão a conferência `dmsid-mcp-metadados` do kit falha).
 - ⚠️ As duas `/.well-known/*` ficam FORA do prefixo global `v1` → `setGlobalPrefix('v1', { exclude: [...] })`.
 
+## Autorização por clique (Padrão §3; plano "Clique Regem → Orzuni", parte O1, 13/11/2026)
+
+O dono da conta liga a loja do iFood ao aplicativo sozinho, sem chave copiada e sem a distribuição. A ligação que nasce
+é a MESMA do atalho (`ligacao_dms`, uma ativa por loja e aplicativo): a porta MCP não muda. Migration **010** (a 009
+fica para o aceite dos termos).
+
+1. **O pedido empurrado (RFC 9126)** — `POST /v1/dms-id/autorizacao/pedido`, com o token do DMS ID do aplicativo, em
+   JSON: `response_type=code`, `client_id` (opcional; se vier, o do token), `redirect_uri` (um endereço de volta
+   cadastrado: o padrão do código em `autorizacao.regras.ts`, `VOLTAS_PADRAO`, ou `DMS_ID_VOLTAS`, JSON produto → lista),
+   `scope` (as permissões, separadas por espaço: necessárias e opcionais do cadastro do aplicativo,
+   `APLICATIVOS_DO_CLIQUE`), `state` (16 a 200 caracteres visíveis), `code_challenge` + `code_challenge_method=S256`,
+   `conta_nome`, `conta_cnpj` (14 dígitos ou vazio), `conta_email`, `conta_marca`, `conta_loja` e `conta_loja_id` (a
+   loja do aplicativo que pede: é por ela que a página sabe o que já está ligado). Resposta `201`:
+   `{ request_uri, expires_in: 600, authorization_endpoint }`.
+2. **A página** — o aplicativo abre `authorization_endpoint?client_id=…&request_uri=…` (`https://app.orzuni.com/autorizar`).
+   Sem sessão, o login devolve a pessoa a ela. A ordem é a do Padrão: o aplicativo, quem pede (o Orzuni não guarda CNPJ
+   da conta, então a confirmação de outra empresa aparece SEMPRE), onde vale (uma loja do iFood da conta; a já ligada a
+   OUTRA loja do aplicativo aparece e não se escolhe; a ligada pela chave antiga é substituída), as permissões
+   (necessárias sem chave, opcionais desligadas), o que o aplicativo não pode e a senha (nunca o PIN; 5 erradas em 15
+   minutos travam a autorização, não o login).
+3. **A volta** — autorizado: `redirect_uri?code=orz_ac_…&state=…&iss=https://api.orzuni.com` (código de uso único, 10
+   minutos). "Agora não": `error=access_denied`. Pedido vencido ou usado: `error=invalid_request_uri`, sempre ao endereço
+   GUARDADO no pedido, nunca a um que veio no link.
+4. **A troca** — `POST /v1/dms-id/autorizacao/token`, com o token do DMS ID: `grant_type=authorization_code`, `code`,
+   `redirect_uri` (o mesmo do pedido), `code_verifier`, `client_id` (opcional). Resposta: `{ ligacao, prefixo, conta_id,
+   loja, loja_nome, permissoes, segredo_em }` — o segredo aparece uma vez. Pedir mais (a mesma `conta_loja_id`) soma ao
+   que a ligação tinha; repetir troca o segredo. O código usado de novo é recusado e DESLIGA a ligação que ele criou.
+   Recusa: `400 autorizacao-invalida`, a mesma frase para todo motivo (o motivo vai só para o log).
+5. **Aplicativos conectados** — tela `/aplicativos` do app web (`GET /v1/aplicativos-conectados`,
+   `POST /v1/aplicativos-conectados/desligar`, só com a sessão do dono): o que cada aplicativo pode, em qual loja, o texto
+   que o dono leu (`autorizacao_pedido.texto`, versão 1) e o desligar, que vale na chamada seguinte.
+
+- Aplicativo fora do `DMS_ID_APLICATIVOS` ou sem cadastro no clique: `401 cliente-invalido`. Aplicativo parado na
+  lista do hub: `503 integracao-parada` no pedido, na página e na troca.
+- Desligada a porta (`ORZUNI_MCP_ATIVO=false`), as rotas do DMS ID respondem 404; as da sessão precisam do banco.
+- Pendente: o e-mail ao dono a cada ligação nova (o Orzuni ainda não envia e-mail) — hoje o dono vê em
+  "Aplicativos conectados".
+
 ## Credenciais (§2, §6)
 - A porta MCP aceita **só token do DMS ID** (`Authorization: Bearer`, `aud` = recurso do Orzuni, RFC 8707)
   **+** o segredo da ligação no cabeçalho `DMS-Ligacao` (qual loja autorizou). Nenhum outro token.

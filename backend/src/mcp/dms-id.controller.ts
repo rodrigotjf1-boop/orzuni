@@ -17,6 +17,7 @@ import type { Request, Response } from 'express';
 
 import { ErroProblema } from '../dms/integracao-dms';
 import { anotarChamada } from '../hub/chamada-atual';
+import { AutorizacaoService, type LigacaoDoClique } from './autorizacao.service';
 import { DmsIdService } from './dms-id.service';
 import { IntegracaoGuard, type RequestDeIntegracao } from './integracao.guard';
 import { LigacaoService, type LigacaoEntregue } from './ligacao.service';
@@ -32,7 +33,42 @@ export class DmsIdController {
   constructor(
     private readonly dmsId: DmsIdService,
     private readonly ligacoes: LigacaoService,
+    private readonly autorizacao: AutorizacaoService,
   ) {}
+
+  /** O token do DMS ID conferido, com o desafio `WWW-Authenticate` na recusa (como o atalho). */
+  private async comToken<T>(req: Request, res: Response, ferramenta: string, fn: (doToken: Awaited<ReturnType<DmsIdService['conferir']>>) => Promise<T>): Promise<T> {
+    if (!this.dmsId.ligado) throw new ErroProblema('nao-encontrado', DESLIGADA);
+    anotarChamada({ ferramenta, credencial: 'dms_id' });
+    const bearer = bearerDoCabecalho(req.headers.authorization);
+    try {
+      return await fn(await this.dmsId.conferir(bearer));
+    } catch (erro) {
+      const desafio = desafioDaRecusa(erro, bearer !== null, this.dmsId.enderecoDosMetadados());
+      if (desafio) res.setHeader('WWW-Authenticate', desafio);
+      throw erro;
+    }
+  }
+
+  /**
+   * O pedido empurrado da autorização por clique (RFC 9126; Padrão §3): o aplicativo registra o endereço de volta, as
+   * permissões, o `state`, o desafio do PKCE e a conta que pede; recebe o número do pedido (10 minutos) e o endereço da
+   * página, que ele abre no navegador com `client_id` e `request_uri`.
+   */
+  @Post('dms-id/autorizacao/pedido')
+  @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store')
+  pedir(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() corpo: unknown) {
+    return this.comToken(req, res, 'dms-id.autorizacao.pedido', (doToken) => this.autorizacao.pedir(doToken, corpo));
+  }
+
+  /** A troca do código pela ligação, de servidor para servidor, com o verificador do PKCE. */
+  @Post('dms-id/autorizacao/token')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  trocarCodigo(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() corpo: unknown): Promise<LigacaoDoClique> {
+    return this.comToken(req, res, 'dms-id.autorizacao.token', (doToken) => this.autorizacao.trocar(doToken, corpo));
+  }
 
   @Get(CAMINHO_DOS_METADADOS)
   @Header('Cache-Control', 'public, max-age=300')

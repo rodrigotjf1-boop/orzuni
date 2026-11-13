@@ -64,6 +64,26 @@ export class StoreService implements OnModuleInit {
     return rows;
   }
 
+  /**
+   * Uma transação, tudo ou nada, numa conexão só do pool (a troca do código do clique gasta o código e cria a ligação
+   * juntos). Sem banco, lança: quem chama confere `temBanco` antes.
+   */
+  async transacao<T>(fn: (q: (sql: string, params?: any[]) => Promise<any[]>) => Promise<T>): Promise<T> {
+    if (!this.pool) throw new Error('sem banco: a transação precisa do Postgres');
+    const cliente = await this.pool.connect();
+    try {
+      await cliente.query('begin');
+      const r = await fn(async (sql, params = []) => (await cliente.query(sql, params)).rows);
+      await cliente.query('commit');
+      return r;
+    } catch (e) {
+      await cliente.query('rollback').catch(() => {});
+      throw e;
+    } finally {
+      cliente.release();
+    }
+  }
+
   private async contaId(merchantId: string, nome: string): Promise<string | null> {
     if (!this.pool) return null;
     const cache = this.contaCache.get(merchantId);
