@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Chave, type Loja } from '@/lib/api';
 import { useToast } from '@/components/toast';
 
@@ -27,6 +27,11 @@ export default function ApiErpPage() {
   const [lojaNome, setLojaNome] = useState('');
   const [lojaTeste, setLojaTeste] = useState(false);
   const [lojaEmail, setLojaEmail] = useState('');
+  const emailRef = useRef<HTMLInputElement>(null);
+  // descoberta: lojas que autorizaram o app no iFood (null = ainda não li)
+  const [autorizadas, setAutorizadas] = useState<Loja[] | null>(null);
+  const [erroAut, setErroAut] = useState<string | null>(null);
+  const [lendoAut, setLendoAut] = useState(false);
   // editar escopos de uma chave existente
   const [editId, setEditId] = useState<string | null>(null);
   const [editEsc, setEditEsc] = useState<string[]>([]);
@@ -43,9 +48,34 @@ export default function ApiErpPage() {
       setErro(e.message);
     }
   }, []);
+  // Leitura à parte: esta chama o iFood e pode falhar sem derrubar o resto da tela.
+  // O botão fica desligado enquanto lê, então não há duas leituras cruzadas.
+  const carregarAutorizadas = useCallback(async () => {
+    setLendoAut(true);
+    try {
+      const d = await api.lojas.disponiveis();
+      setAutorizadas(d.lojas);
+      setErroAut(null);
+    } catch (e: any) {
+      setErroAut(e.message);
+    } finally {
+      setLendoAut(false);
+    }
+  }, []);
   useEffect(() => {
     carregar();
-  }, [carregar]);
+    carregarAutorizadas();
+  }, [carregar, carregarAutorizadas]);
+
+  // autorizaram o app no iFood e ainda não têm linha conectada no Orzuni
+  const novas = (autorizadas ?? []).filter((a) => !lojas.some((l) => l.merchantId === a.merchantId));
+
+  function usarLoja(l: Loja) {
+    setLojaMerchant(l.merchantId);
+    setLojaNome(l.nome);
+    toast('Agora informe o e-mail da conta e clique em “Adicionar loja”.');
+    emailRef.current?.focus();
+  }
 
   async function addLoja() {
     if (!lojaMerchant.trim()) return;
@@ -149,10 +179,39 @@ export default function ApiErpPage() {
             </button>
           </div>
         ))}
+
+        {/* descoberta: quem autorizou o app no iFood e ainda não está conectada */}
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+            <b style={{ fontSize: '.86rem', flex: 1, minWidth: 200 }}>Autorizaram o Orzuni no iFood e ainda não estão conectadas</b>
+            <button className="btn ghost mini" disabled={lendoAut} onClick={carregarAutorizadas}>
+              {lendoAut ? 'Lendo…' : 'Atualizar'}
+            </button>
+          </div>
+          {erroAut && <div className="errbox">Não consegui ler as lojas no iFood: {erroAut}</div>}
+          {!erroAut && autorizadas === null && <div className="sub" style={{ margin: 0 }}>Lendo as lojas no iFood…</div>}
+          {!erroAut && autorizadas !== null && novas.length === 0 && (
+            <div className="sub" style={{ margin: 0 }}>
+              Nenhuma loja nova. Quando o dono autorizar o Orzuni no Portal do Parceiro do iFood, a loja aparece aqui — use “Atualizar”.
+            </div>
+          )}
+          {novas.map((l) => (
+            <div key={l.merchantId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b style={{ fontSize: '.9rem' }}>{l.nome}</b>
+                <div className="mono" style={{ color: 'var(--dim)', fontSize: '.66rem', textTransform: 'none', marginTop: 2, overflowWrap: 'anywhere' }}>merchant {l.merchantId}</div>
+              </div>
+              <button className="btn ghost mini" onClick={() => usarLoja(l)}>
+                Usar esta loja
+              </button>
+            </div>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...box, flex: 2, minWidth: 220, fontFamily: 'var(--font-mono)', fontSize: '.8rem' }} placeholder="merchantId (UUID do iFood)" value={lojaMerchant} onChange={(e) => setLojaMerchant(e.target.value)} />
           <input style={{ ...box, flex: 1, minWidth: 120 }} placeholder="Nome" value={lojaNome} onChange={(e) => setLojaNome(e.target.value)} />
-          <input type="email" style={{ ...box, flex: 1, minWidth: 180 }} placeholder="E-mail da conta do cliente (opcional)" value={lojaEmail} onChange={(e) => setLojaEmail(e.target.value)} autoComplete="off" />
+          <input ref={emailRef} type="email" style={{ ...box, flex: 1, minWidth: 180 }} placeholder="E-mail da conta do cliente (opcional)" value={lojaEmail} onChange={(e) => setLojaEmail(e.target.value)} autoComplete="off" />
           <label className="sub" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.78rem', cursor: 'pointer', whiteSpace: 'nowrap', opacity: lojaEmail.trim() ? 0.4 : 1 }}>
             <input type="checkbox" checked={lojaTeste} disabled={!!lojaEmail.trim()} onChange={(e) => setLojaTeste(e.target.checked)} />
             Loja de teste de integração
