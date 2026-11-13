@@ -143,6 +143,23 @@ export interface ResumoImportacao {
   nadaMudou?: boolean;
 }
 
+/** Uma loja do Regem que o presidente ligou a esta conta pelo clique. */
+export interface LojaDoRegem {
+  id: string;
+  nome: string;
+}
+
+/** A conexão com o Regem: `clique` = o botão "Conectar pelo Regem" está disponível; `origem` = como ela nasceu. */
+export interface StatusImportarRegem {
+  conectado: boolean;
+  clique?: boolean;
+  origem?: 'chave' | 'clique';
+  loja?: LojaDoRegem | null;
+  lojas?: LojaDoRegem[];
+  ultimaImportacao?: string;
+  ultimoResumo?: ResumoImportacao | null;
+}
+
 export const api = {
   cardapio: () => req<{ itens: ItemCardapio[] }>('v1/cardapio'),
   alertas: () => req<{ alertas: Alerta[] }>('v1/vigia/alertas'),
@@ -265,12 +282,20 @@ export const api = {
       req<{ ok: boolean; erro?: string }>('v1/minhas-lojas', { method: 'POST', body: JSON.stringify({ merchantId, nome }) }),
   },
   // Importar o cardápio do Regem para o iFood (Fase 1). Isolado por tenant (sessão).
-  // A base do Regem é fixa no servidor; aqui só a chave de integração.
+  // A base do Regem é fixa no servidor. A conexão nasce pelo clique ("Conectar pelo Regem": o servidor devolve a página
+  // do Regem para o navegador abrir, e a volta conclui) ou pela chave de integração colada.
   importarRegem: {
-    status: () =>
-      req<{ conectado: boolean; ultimaImportacao?: string; ultimoResumo?: ResumoImportacao | null }>('v1/importar-regem'),
+    status: () => req<StatusImportarRegem>('v1/importar-regem'),
     conectar: (token: string) =>
       req<{ ok: boolean; produtos?: number; erro?: string }>('v1/importar-regem/conectar', { method: 'POST', body: JSON.stringify({ token }) }),
+    cliqueIniciar: () => req<{ ok: boolean; url?: string; erro?: string }>('v1/importar-regem/clique/iniciar', { method: 'POST' }),
+    cliqueConcluir: (volta: { code?: string; state?: string; iss?: string; error?: string }) =>
+      req<{ ok: boolean; situacao?: 'conectado' | 'recusado'; lojas?: LojaDoRegem[]; emUso?: LojaDoRegem; erro?: string }>('v1/importar-regem/clique/concluir', {
+        method: 'POST',
+        body: JSON.stringify(volta),
+      }),
+    escolherLoja: (loja: string) =>
+      req<{ ok: boolean; loja?: LojaDoRegem; erro?: string }>('v1/importar-regem/loja', { method: 'POST', body: JSON.stringify({ loja }) }),
     executar: () => req<{ ok: boolean; resumo?: ResumoImportacao; erro?: string }>('v1/importar-regem/executar', { method: 'POST' }),
   },
   editar: (pdv: string, campos: { nome?: string; descricao?: string; preco?: number; status?: 'no_ar' | 'pausado'; shifts?: Shift[]; imagem?: string; pdv?: string; complementos?: Array<{ grupo: string; min: number; max: number; refId?: string; opcoes: Array<{ nome: string; preco?: number; pdv?: string; imagem?: string }> }> }) =>
