@@ -14,7 +14,11 @@ const NAV = [
   { href: '/cardapio', label: 'Cardápio', icon: 'menu' },
   { href: '/importar', label: 'Importar do Regem', icon: 'importar' },
   { href: '/conectar', label: 'Conectar iFood', icon: 'conectar' },
+  { href: '/aplicativos', label: 'Aplicativos conectados', icon: 'aplicativos' },
 ];
+
+// Telas sem a moldura (sem o menu): a entrada e a página de autorização por clique, que mostra só o pedido.
+const SEM_MOLDURA = ['/login', '/cadastro', '/autorizar'];
 
 function Icon({ name }: { name: string }) {
   if (name === 'vigia')
@@ -55,6 +59,12 @@ function Icon({ name }: { name: string }) {
         <path d="M4 9l1-4h14l1 4M5 9v10h14V9M5 9h14M12 12v4M10 14h4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
+  if (name === 'aplicativos')
+    return (
+      <svg viewBox="0 0 24 24">
+        <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   if (name === 'importar')
     return (
       <svg viewBox="0 0 24 24">
@@ -76,7 +86,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [loja, setLoja] = useState<string | null>(null);
 
   useEffect(() => {
-    if (path === '/login' || path === '/cadastro') return;
+    if (SEM_MOLDURA.includes(path)) return;
     setLoja(lojaAtiva());
     api.minhasLojas
       .listar()
@@ -96,8 +106,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const store = lojas.find((l) => l.merchantId === ativaId) ?? lojas[0];
   const lojaConectada = store && store.nome && store.nome !== 'loja' ? store.nome : 'Loja iFood';
 
-  // login e cadastro não usam o shell (sem sidebar)
-  if (path === '/login' || path === '/cadastro') return <>{children}</>;
+  // login, cadastro e a autorização por clique não usam o shell (sem sidebar)
+  if (SEM_MOLDURA.includes(path)) return <>{children}</>;
 
   function sair() {
     navegar(async () => {

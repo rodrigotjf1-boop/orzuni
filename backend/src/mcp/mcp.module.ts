@@ -4,6 +4,9 @@ import { RegistroDaPorta } from '../hub/registro-da-porta.middleware';
 import { CatalogoModule } from '../catalogo/catalogo.module';
 import { ContaModule } from '../conta/conta.module';
 import { LojaModule } from '../loja/loja.module';
+import { UsuarioModule } from '../usuario/usuario.module';
+import { AutorizacaoController } from './autorizacao.controller';
+import { AutorizacaoService } from './autorizacao.service';
 import { DmsIdController } from './dms-id.controller';
 import { DmsIdService } from './dms-id.service';
 import { IntegracaoGuard } from './integracao.guard';
@@ -19,9 +22,9 @@ import { McpServidor } from './mcp.servidor';
  * na porta MCP e na troca/revogação da ligação.
  */
 @Module({
-  imports: [CatalogoModule, LojaModule, ContaModule],
-  controllers: [McpController, DmsIdController, ManifestoController],
-  providers: [McpServidor, DmsIdService, LigacaoService, IntegracaoGuard, RegistroDaPorta],
+  imports: [CatalogoModule, LojaModule, ContaModule, UsuarioModule],
+  controllers: [McpController, DmsIdController, ManifestoController, AutorizacaoController],
+  providers: [McpServidor, DmsIdService, LigacaoService, IntegracaoGuard, RegistroDaPorta, AutorizacaoService],
 })
 export class McpModule implements NestModule {
   configure(consumidor: MiddlewareConsumer): void {
