@@ -84,26 +84,50 @@ export class StoreService implements OnModuleInit {
     }
   }
 
-  private async contaId(merchantId: string, nome: string): Promise<string | null> {
+  /**
+   * A linha de `conta_ifood` onde fica o ESTADO do vigia desta loja do iFood (item_estado e alerta).
+   *
+   * O vigia só LÊ o registro de lojas: nunca liga uma loja a uma conta nem troca o nome dela. Antes, aqui havia um
+   * upsert de uma linha "loja" na conta da distribuição para TODA loja varrida — com o `status` padrão 'connected'.
+   * A loja ligada à conta de um cliente ganhava uma cópia conectada na conta da distribuição: aparecia duas vezes na
+   * lista do admin, o vigia a varria duas vezes por rodada e a busca por merchant (`limit 1`) ficava ambígua.
+   *
+   * Qual linha: a que já guarda estado (o "desde quando" de cada item continua); senão, a mais antiga da loja.
+   * Sem linha nenhuma (modo de uma loja só, pelo env ou pela descoberta): cria a âncora na conta da distribuição com
+   * status 'revoked' — ela guarda o estado, mas não vira loja conectada. Quem conecta loja é o admin.
+   */
+  private async contaId(merchantId: string): Promise<string | null> {
     if (!this.pool) return null;
     const cache = this.contaCache.get(merchantId);
     if (cache) return cache;
-    const { rows } = await this.pool.query(
-      `insert into conta_ifood (tenant_id, merchant_id, nome) values ($1,$2,$3)
-       on conflict (tenant_id, merchant_id) do update set nome = excluded.nome
-       returning id`,
-      [TENANT_PADRAO, merchantId, nome],
-    );
-    const id = rows[0]?.id as string;
+    const achar = async () =>
+      (
+        await this.pool!.query(
+          `select c.id from conta_ifood c
+            where c.merchant_id = $1
+            order by exists (select 1 from item_estado e where e.conta_id = c.id) desc, c.criado_em, c.id
+            limit 1`,
+          [merchantId],
+        )
+      ).rows[0]?.id as string | undefined;
+    let id = await achar();
+    if (!id) {
+      await this.pool.query(
+        `insert into conta_ifood (tenant_id, merchant_id, nome, status) values ($1, $2, 'loja', 'revoked')
+         on conflict (tenant_id, merchant_id) do nothing`,
+        [TENANT_PADRAO, merchantId],
+      );
+      id = await achar();
+    }
     if (id) this.contaCache.set(merchantId, id);
-    return id;
+    return id ?? null;
   }
 
   // ---- estado ----
   async getEstado(merchantId: string): Promise<Map<string, EstadoItem>> {
     if (!this.pool) return this.memEstado.get(merchantId) ?? new Map();
     try {
-      const conta = await this.contaId(merchantId, 'loja');
+      const conta = await this.contaId(merchantId);
       const { rows } = await this.pool.query(
         `select item_id, external_code, nome, no_ar,
                 (extract(epoch from desde)*1000)::bigint as desde
@@ -127,7 +151,7 @@ export class StoreService implements OnModuleInit {
     }
     if (estado.size === 0) return;
     try {
-      const conta = await this.contaId(merchantId, 'loja');
+      const conta = await this.contaId(merchantId);
       // upsert em lote via um INSERT com múltiplos VALUES
       const vals: any[] = [];
       const linhas: string[] = [];
@@ -160,7 +184,7 @@ export class StoreService implements OnModuleInit {
       return;
     }
     try {
-      const conta = await this.contaId(merchantId, 'loja');
+      const conta = await this.contaId(merchantId);
       const { rows } = await this.pool.query(
         `select item_id from alerta where conta_id = $1 and resolvido_em is null`,
         [conta],
@@ -195,7 +219,7 @@ export class StoreService implements OnModuleInit {
     if (!this.pool)
       return [...(this.memAlertas.get(merchantId) ?? new Map()).values()].sort((a, b) => a.caiuEm - b.caiuEm);
     try {
-      const conta = await this.contaId(merchantId, 'loja');
+      const conta = await this.contaId(merchantId);
       const { rows } = await this.pool.query(
         `select item_id, external_code, nome, motivo, grupo_afetado,
                 (extract(epoch from caiu_em)*1000)::bigint as caiu_em

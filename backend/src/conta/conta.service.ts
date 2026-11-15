@@ -45,9 +45,16 @@ export class ContaService {
     return ms.map((m) => ({ merchantId: m.id, nome: m.name }));
   }
 
-  /** Resolve o conta_id (uuid) de uma loja pelo merchantId. */
+  /**
+   * Resolve o conta_id (uuid) de uma loja pelo merchantId. Um merchant pode ter mais de uma linha (a de outra conta
+   * desligada, a âncora do vigia): vale a CONECTADA; empate, a mais antiga. Sem a ordem, o `limit 1` podia pegar a
+   * linha desligada e a ligação recusava a loja como bloqueada.
+   */
   async contaIdDe(merchantId: string): Promise<string | null> {
-    const rows = await this.store.query(`select id from conta_ifood where merchant_id = $1 limit 1`, [merchantId]);
+    const rows = await this.store.query(
+      `select id from conta_ifood where merchant_id = $1 order by (status = 'connected') desc, criado_em, id limit 1`,
+      [merchantId],
+    );
     return rows[0]?.id ?? null;
   }
 
@@ -89,7 +96,7 @@ export class ContaService {
   /** O tenant que JÁ liga este merchant (connected), ou null. Trava anti-IDOR do conectar. */
   async tenantDoMerchant(merchantId: string): Promise<string | null> {
     const rows = await this.store.query(
-      `select tenant_id from conta_ifood where merchant_id = $1 and status = 'connected' limit 1`,
+      `select tenant_id from conta_ifood where merchant_id = $1 and status = 'connected' order by criado_em, id limit 1`,
       [merchantId],
     );
     return rows[0]?.tenant_id ?? null;
