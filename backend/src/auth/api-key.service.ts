@@ -80,7 +80,12 @@ export class ApiKeyService {
     if (!this.store.temBanco) return null;
     let contaId: string | null = null;
     if (merchantId) {
-      const rows = await this.store.query(`select id from conta_ifood where merchant_id = $1 limit 1`, [merchantId]);
+      // a linha CONECTADA da loja (empate: a mais antiga) — ligada a uma linha desligada, a chave nasceria morta
+      // (`validarTabela` só aceita chave de loja conectada)
+      const rows = await this.store.query(
+        `select id from conta_ifood where merchant_id = $1 order by (status = 'connected') desc, criado_em, id limit 1`,
+        [merchantId],
+      );
       contaId = rows[0]?.id ?? null;
     }
     const chave = 'orz_live_' + randomBytes(24).toString('hex');
