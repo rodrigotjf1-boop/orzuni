@@ -275,6 +275,41 @@ descrever('autorização por clique (Postgres)', () => {
     expect((await erroDe(svc.pedir(outroToken, {}))).tipo).toBe('cliente-invalido');
   });
 
+  it('a limpeza dos pedidos vencidos guarda o pedido que virou ligação (o texto lido) e só tira os mortos', async () => {
+    const hashDe = (numero: string) => createHash('sha256').update(numero, 'utf8').digest('hex');
+    const envelhecer = (numeros: string[]) =>
+      pool.query(`update autorizacao_pedido set vence_em = now() - interval '2 days' where numero_hash = any($1)`, [numeros.map(hashDe)]);
+    const existe = async (numero: string) => (await pool.query(`select 1 from autorizacao_pedido where numero_hash = $1`, [hashDe(numero)])).rowCount === 1;
+
+    const dono = await novoDono();
+    const loja = await novaLoja(dono.tenant, 'Loja M');
+    const outraLoja = await novaLoja(dono.tenant, 'Loja N');
+    // 1º clique e 2º clique (pedir mais) na mesma loja: os dois viraram ligação — a ligação aponta para o 2º
+    const um = await pedir({ scope: 'catalogo.ler preco.escrever status.escrever', lojaId: 'loja-m' });
+    await trocar(codigoDa((await autorizar(dono, um.numero, loja, { opcionais: [] })).redirect), um.v);
+    const dois = await pedir({ scope: 'catalogo.escrever', lojaId: 'loja-m' });
+    await trocar(codigoDa((await autorizar(dono, dois.numero, loja, { opcionais: ['catalogo.escrever'] })).redirect), dois.v);
+    const [antes] = await ligacaoViva(loja);
+    expect(antes.autorizacao_id).toBeTruthy();
+    // mortos: nunca autorizado; e trocado com o PKCE errado (gasto, sem ligação)
+    const nuncaAutorizado = await pedir();
+    const pkceErrado = await pedir({ lojaId: 'loja-n' });
+    await erroDe(trocar(codigoDa((await autorizar(dono, pkceErrado.numero, outraLoja)).redirect), randomBytes(32).toString('base64url')));
+
+    await envelhecer([um.numero, dois.numero, nuncaAutorizado.numero, pkceErrado.numero]);
+    await pedir(); // o pedido novo dispara a limpeza
+
+    const [depois] = await ligacaoViva(loja);
+    expect(depois.autorizacao_id).toBe(antes.autorizacao_id);
+    expect(await existe(dois.numero)).toBe(true);
+    expect(await existe(um.numero)).toBe(true); // a autorização anterior da mesma ligação também é prova
+    expect(await existe(nuncaAutorizado.numero)).toBe(false);
+    expect(await existe(pkceErrado.numero)).toBe(false);
+    const [conectado] = (await svc.conectados(dono)).filter((c) => c.loja === 'Loja M');
+    expect(conectado.via).toBe('clique');
+    expect(conectado.texto).toContain('"Loja M"');
+  });
+
   it('aplicativos conectados: a lista com o texto lido, e desligar vale na hora (repetir não dá erro)', async () => {
     const dono = await novoDono();
     const loja = await novaLoja(dono.tenant, 'Loja L');

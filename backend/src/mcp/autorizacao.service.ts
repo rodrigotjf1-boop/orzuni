@@ -155,9 +155,18 @@ export class AutorizacaoService {
     );
     if ('erro' in c) throw new ErroProblema('parametro-invalido', c.erro);
 
-    // Pedidos vencidos há mais de um dia saem aqui (não há rotina para isso); nunca derruba o pedido novo.
+    // Pedidos MORTOS vencidos há mais de um dia saem aqui (não há rotina para isso); nunca derruba o pedido novo.
+    // O pedido que virou ligação NÃO sai: ele guarda o texto que o dono leu e a versão (a prova do Padrão DMS §3), e a
+    // ligação aponta para ele (`ligacao_dms.autorizacao_id`, `on delete set null`) — apagá-lo zerava o apontamento, e
+    // "Aplicativos conectados" passava a mostrar a ligação do clique como "via chave", sem o texto.
     await this.store
-      .query(`delete from autorizacao_pedido where vence_em < now() - interval '1 day' and (trocado_em is not null or codigo_hash is null)`)
+      .query(
+        `delete from autorizacao_pedido p
+          where p.vence_em < now() - interval '1 day'
+            and (p.trocado_em is not null or p.codigo_hash is null)
+            and p.ligacao_id is null
+            and not exists (select 1 from ligacao_dms l where l.autorizacao_id = p.id)`,
+      )
       .catch((e) => this.log.warn(`limpeza dos pedidos vencidos falhou: ${e instanceof Error ? e.message : e}`));
 
     const { numero, hash } = gerarPedido();
